@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import HomePage from './pages/HomePage.jsx';
 import DsrToSchedulePage from './pages/DsrToSchedulePage.jsx';
 import ScheduleToBillPage from './pages/ScheduleToBillPage.jsx';
+import ExcelToPdfPage from './pages/ExcelToPdfPage.jsx';
 import SessionsPage from './pages/SessionsPage.jsx';
 import { useSession } from './SessionContext.jsx';
 
@@ -20,8 +21,9 @@ export default function App() {
   const { session, ready } = useSession();
   const page = route.startsWith('#/schedule') ? 'schedule'
     : route.startsWith('#/bill') ? 'bill'
-      : route.startsWith('#/sessions') ? 'sessions'
-        : 'home';
+      : route.startsWith('#/topdf') ? 'topdf'
+        : route.startsWith('#/sessions') ? 'sessions'
+          : 'home';
 
   const NavLink = ({ to, id, children }) => (
     <a href={to} className={'navlink' + (page === id ? ' active' : '')}>{children}</a>
@@ -35,6 +37,7 @@ export default function App() {
           <NavLink to="#/" id="home">Home</NavLink>
           <NavLink to="#/schedule" id="schedule">DSR → Schedule</NavLink>
           <NavLink to="#/bill" id="bill">Schedule → Bill</NavLink>
+          <NavLink to="#/topdf" id="topdf">Excel → PDF</NavLink>
           <NavLink to="#/sessions" id="sessions">Sessions</NavLink>
         </div>
         <a href="#/sessions" className={'active-session' + (page === 'sessions' ? ' on' : '')} title="Active tender — click to manage sessions">
@@ -47,6 +50,7 @@ export default function App() {
           re-initializes its form state from the newly active session's saved slice */}
       {page === 'schedule' && <DsrToSchedulePage key={session?.id || 'none'} />}
       {page === 'bill' && <ScheduleToBillPage key={session?.id || 'none'} />}
+      {page === 'topdf' && <ExcelToPdfPage />}
       {page === 'sessions' && <SessionsPage />}
     </div>
   );

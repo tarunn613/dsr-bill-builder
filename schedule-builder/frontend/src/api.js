@@ -95,6 +95,41 @@ export async function parseScheduleFile(file, sessionId) {
   return res.json();
 }
 
+// ---- Excel -> B&W A4 PDF (zip of per-sheet PDFs) --------------------------
+export async function listXlsxSheets(file) {
+  const b64 = await fileToBase64(file);
+  const res = await fetch('/api/topdf/list', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ fileBase64: b64 }),
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.error || 'could not read workbook');
+  }
+  return (await res.json()).sheets || [];
+}
+
+export async function convertXlsxToPdf(file, sheets, sessionId) {
+  const b64 = await fileToBase64(file);
+  const res = await fetch('/api/topdf', {
+    method: 'POST', headers: JSON_HEADERS,
+    body: JSON.stringify({ fileBase64: b64, filename: file.name, sheets, sessionId }),
+  });
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.error || 'could not convert workbook');
+  }
+  const blob = await res.blob();
+  const disp = res.headers.get('Content-Disposition') || '';
+  const m = disp.match(/filename="?([^"]+)"?/);
+  const filename = m ? m[1] : 'workbook_pdf.zip';
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  return filename;
+}
+
 export async function lookupCementCoeffs(codes) {
   try {
     const res = await fetch('/api/cement/coeffs', {

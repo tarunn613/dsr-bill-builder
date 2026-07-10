@@ -10,6 +10,7 @@ import { buildSchedulePdf } from './pdf.js';
 import { computeBill } from './bill-core.js';
 import { buildBillWorkbook } from './bill-excel.js';
 import { parseScheduleBuffer } from './bill-parse.js';
+import { renderWorkbookToZip, listSheetNames } from './xlsx-pdf.js';
 import { coeffsFor, searchByDesc, searchByCode, searchCombined } from './cement.js';
 import {
   listSessions, createSession, getSession, updateSession, deleteSession,
@@ -180,6 +181,45 @@ app.post('/api/cement/search-combined', (req, res) => {
   catch (e) { res.status(400).json({ error: String(e.message || e) }); }
 });
 
+// ---- Excel -> B&W A4 PDF (one PDF per sheet, zipped) -----------------------
+// Decode a base64 (optionally data-URI) xlsx from the request body.
+function xlsxFromBody(req) {
+  const b64 = (req.body && req.body.fileBase64) || '';
+  if (!b64) return null;
+  return Buffer.from(b64.replace(/^data:.*;base64,/, ''), 'base64');
+}
+
+// list the worksheet names in an uploaded workbook (for the convert UI checklist)
+app.post('/api/topdf/list', async (req, res) => {
+  try {
+    const buffer = xlsxFromBody(req);
+    if (!buffer) return res.status(400).json({ error: 'no file' });
+    res.json({ sheets: await listSheetNames(buffer) });
+  } catch (e) {
+    res.status(400).json({ error: 'could not read workbook: ' + String(e.message || e) });
+  }
+});
+
+// convert selected sheets to B&W A4 PDFs, returned as a zip
+app.post('/api/topdf', async (req, res) => {
+  try {
+    const buffer = xlsxFromBody(req);
+    if (!buffer) return res.status(400).json({ error: 'no file' });
+    const sheets = Array.isArray(req.body.sheets) ? req.body.sheets : null;
+    const { zipBuffer, sheets: rendered } = await renderWorkbookToZip(buffer, { sheets });
+    if (!rendered.length) return res.status(400).json({ error: 'no non-empty sheets to convert' });
+    const base = String(req.body.filename || 'workbook').replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'workbook';
+    const filename = `${base}_pdf.zip`;
+    archiveIfSession(req.body.sessionId, 'topdf', 'zip', filename, zipBuffer);
+    res.setHeader('Content-Type', 'application/zip');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.send(zipBuffer);
+  } catch (e) {
+    console.error(e);
+    res.status(400).json({ error: 'could not convert workbook: ' + String(e.message || e) });
+  }
+});
+
 // ---- Phase 4: sessions (named tender projects; no work lost) ---------------
 app.get('/api/sessions', (req, res) => {
   try { res.json({ sessions: listSessions(), dir: sessionsBaseDir() }); }
@@ -222,7 +262,9 @@ app.get('/api/sessions/:id/exports/:exportId', (req, res) => {
     if (!f) return res.status(404).json({ error: 'export not found' });
     const type = f.kind === 'pdf'
       ? 'application/pdf'
-      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+      : f.kind === 'zip'
+        ? 'application/zip'
+        : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     res.setHeader('Content-Type', type);
     res.setHeader('Content-Disposition', `attachment; filename="${f.filename}"`);
     res.sendFile(f.path);

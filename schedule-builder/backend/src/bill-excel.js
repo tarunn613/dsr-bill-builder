@@ -75,6 +75,7 @@ function buildBillWorkbook(payload = {}) {
   const idx = rows.map((_, i) => i);
   const mainIdx = idx.filter((i) => isMain(rows[i].category || 'DSR'));
   const mktIdx = idx.filter((i) => !isMain(rows[i].category || 'DSR'));
+  const ordered = [...mainIdx, ...mktIdx]; // schedule order: main items first, then MKT/Recovery
 
   const wb = new ExcelJS.Workbook();
   wb.creator = 'DSR Bill Builder';
@@ -135,43 +136,68 @@ function buildBillWorkbook(payload = {}) {
   const lessRow = sumLabel(r + 1, `Less @ ${quotedPct}% ${below ? 'below' : 'above'} as per Contractor quoted rate`, `ROUND(G${subRow}*${quotedPct}%,2)`, false);
   sumLabel(r + 2, 'Work Outlay (Rs.)', `ROUND(G${subRow}${below ? '-' : '+'}G${lessRow},0)`);
 
-  // ============ RE (only main items get measurement blocks) ============
+  // ============ RE (one measurement block per item; the signature line sits
+  //   OUTSIDE the table, and every item is captured — DSR/Appd get a measured
+  //   grid, MKT/Recovery are shown "at par" i.e. at their scheduled quantity) ============
   const re = wb.addWorksheet('RE', { views: [{ showGridLines: false }] });
   re.columns = [{ width: 7 }, { width: 36 }, { width: 8 }, { width: 8 }, { width: 11 }, { width: 11 }, { width: 12 }, { width: 13 }, { width: 9 }];
   headerBlock(re, meta, 9, 'Record Entry');
+
+  // signature line — deliberately borderless (not part of the table), spread across the page
+  const signatureLine = (rr) => {
+    const marks = [['B', 'A.E.'], ['E', 'J.E. (C)'], ['H', 'Cont.']];
+    for (const [c, label] of marks) {
+      const cell = re.getCell(`${c}${rr}`);
+      cell.value = label; cell.font = { bold: true }; cell.alignment = { horizontal: 'center' };
+    }
+  };
+
   let ry = 17;
-  for (const i of mainIdx) {
+  for (const i of ordered) {
     const sr = schedRow[i];
-    const mrows = (meas[i] || []).filter((m) => m && (m.n !== '' && m.n != null));
-    const nMeas = Math.max(mrows.length, 6);
+    const mainItem = isMain(rows[i].category || 'DSR');
     re.getCell(`B${ry}`).value = 'Date of Measurement:-'; re.getCell(`B${ry}`).font = { bold: true };
     re.getCell(`H${ry}`).value = 'P-'; re.getCell(`H${ry}`).font = { bold: true };
-    colHeaderRow(re, ry + 1, ['S.No', 'Description', 'Nos', '', 'Length', 'Width', 'Height /Depth', 'Quantity', 'Unit']);
+    colHeaderRow(re, ry + 1, ['S.No', 'Description', 'Nos', 'Nos', 'Length', 'Width', 'Height /Depth', 'Quantity', 'Unit']);
     const itemRow = ry + 2;
     re.getCell(`A${itemRow}`).value = { formula: `IF(Schedule!A${sr}="","",Schedule!A${sr})` };
     re.getCell(`B${itemRow}`).value = { formula: `IF(Schedule!C${sr}="","",Schedule!C${sr})` };
     for (let c = 1; c <= 9; c++) { re.getCell(itemRow, c).border = BORDER; re.getCell(itemRow, c).font = { bold: true }; }
     re.getCell(`B${itemRow}`).alignment = { wrapText: true, vertical: 'top' };
     re.getRow(itemRow).height = descHeight(rows[i].description, 34);
-    const ms = itemRow + 1, me = ms + nMeas - 1;
-    for (let k = 0; k < nMeas; k++) {
-      const rr = ms + k, m = mrows[k] || {};
-      const put = (col, val) => { const c = re.getCell(rr, col); if (val !== '' && val != null) c.value = num(val); c.fill = YELLOW; c.border = BORDER; c.alignment = { horizontal: 'right' }; };
-      const b = re.getCell(rr, 2); b.value = m.label || ''; b.fill = YELLOW; b.border = BORDER; b.alignment = { wrapText: true };
-      re.getCell(rr, 1).border = BORDER;
-      put(3, m.n); put(4, m.f); put(5, m.l); put(6, m.w); put(7, m.h);
-      const h = re.getCell(rr, 8); h.value = { formula: `IF(C${rr}="","",PRODUCT(C${rr}:G${rr}))` }; h.numFmt = QTY; h.border = BORDER; h.alignment = { horizontal: 'right' };
-      re.getCell(rr, 9).border = BORDER;
+
+    let tRow;
+    if (mainItem) {
+      // measured grid: Qty = PRODUCT(Nos, factor, L, W, H); item Total = SUM(rows)
+      const mrows = (meas[i] || []).filter((m) => m && (m.n !== '' && m.n != null));
+      const nMeas = Math.max(mrows.length, 6);
+      const ms = itemRow + 1, me = ms + nMeas - 1;
+      for (let k = 0; k < nMeas; k++) {
+        const rr = ms + k, m = mrows[k] || {};
+        const put = (col, val) => { const c = re.getCell(rr, col); if (val !== '' && val != null) c.value = num(val); c.fill = YELLOW; c.border = BORDER; c.alignment = { horizontal: 'right' }; };
+        const b = re.getCell(rr, 2); b.value = m.label || ''; b.fill = YELLOW; b.border = BORDER; b.alignment = { wrapText: true };
+        re.getCell(rr, 1).border = BORDER;
+        put(3, m.n); put(4, m.f); put(5, m.l); put(6, m.w); put(7, m.h);
+        const h = re.getCell(rr, 8); h.value = { formula: `IF(C${rr}="","",PRODUCT(C${rr}:G${rr}))` }; h.numFmt = QTY; h.border = BORDER; h.alignment = { horizontal: 'right' };
+        re.getCell(rr, 9).border = BORDER;
+      }
+      tRow = me + 1;
+      const th = re.getCell(`H${tRow}`); th.value = { formula: `IF(SUM(H${ms}:H${me})=0,"",SUM(H${ms}:H${me}))` }; th.numFmt = QTY; th.font = { bold: true };
+    } else {
+      // MKT / Recovery: billed at scheduled quantity (at par) — recorded here so RE is complete
+      const atRow = itemRow + 1;
+      const lbl = re.getCell(`B${atRow}`); lbl.value = 'Quantity as per Schedule (billed at par)'; lbl.alignment = { wrapText: true }; lbl.border = BORDER;
+      const q = re.getCell(`H${atRow}`); q.value = { formula: `IF(Schedule!D${sr}="","",Schedule!D${sr})` }; q.numFmt = QTY; q.border = BORDER; q.alignment = { horizontal: 'right' };
+      for (const c of ['A', 'C', 'D', 'E', 'F', 'G', 'I']) re.getCell(`${c}${atRow}`).border = BORDER;
+      tRow = atRow + 1;
+      const th = re.getCell(`H${tRow}`); th.value = { formula: `IF(Schedule!D${sr}="","",Schedule!D${sr})` }; th.numFmt = QTY; th.font = { bold: true };
     }
-    const tRow = me + 1;
     re.getCell(`G${tRow}`).value = 'Total'; re.getCell(`G${tRow}`).font = { bold: true }; re.getCell(`G${tRow}`).alignment = { horizontal: 'right' };
-    const th = re.getCell(`H${tRow}`); th.value = { formula: `IF(SUM(H${ms}:H${me})=0,"",SUM(H${ms}:H${me}))` }; th.numFmt = QTY; th.font = { bold: true };
     re.getCell(`I${tRow}`).value = { formula: `IF(Schedule!E${sr}="","",Schedule!E${sr})` };
     for (const c of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']) re.getCell(`${c}${tRow}`).border = BORDER;
     reTotalRow[i] = tRow;
     re.getCell(`B${tRow + 1}`).value = 'C/O   MB -                     P-';
-    re.getCell(`C${tRow + 3}`).value = 'A.E.'; re.getCell(`F${tRow + 3}`).value = 'J.E. (C)'; re.getCell(`H${tRow + 3}`).value = 'Cont.';
-    ['C', 'F', 'H'].forEach((c) => { re.getCell(`${c}${tRow + 3}`).alignment = { horizontal: 'center' }; re.getCell(`${c}${tRow + 3}`).font = { bold: true }; });
+    signatureLine(tRow + 3);
     ry = tRow + 5;
   }
 
@@ -182,7 +208,6 @@ function buildBillWorkbook(payload = {}) {
   colHeaderRow(ab, 18, ['S.No', 'DESCRIPTION', 'QTY.', 'UNIT', 'RATE', 'AMOUNT']);
   let ay = 20;
   const mainAmtCells = [], mktAmtCells = [];
-  const ordered = [...mainIdx, ...mktIdx];
   for (const i of ordered) {
     const sr = schedRow[i], main = isMain(rows[i].category || 'DSR'), recovery = rows[i].category === 'Recovery';
     const descRow = ay, qtyRow = ay + 1;

@@ -444,3 +444,38 @@ button.ghost.danger:hover { background: #fde8e8; }
 
 .muted { color: var(--muted); }
 
+
+/* ---- Excel → PDF page ---------------------------------------------------- */
+.page-head { margin-bottom: 6px; }
+.page-head h1 { margin: 0 0 6px; }
+.page-sub { color: var(--muted); font-size: 13px; line-height: 1.6; max-width: 760px; margin: 0; }
+
+.topdf-drop {
+  border: 2px dashed var(--green-2); border-radius: 12px; background: #fbfdfb;
+  padding: 26px 18px; text-align: center; cursor: pointer; transition: background .15s, border-color .15s;
+}
+.topdf-drop:hover { background: #f0faf0; border-color: var(--green); }
+.topdf-drop-inner { display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 13px; color: #374151; }
+.topdf-drop-icon { font-size: 20px; color: var(--green); }
+
+.topdf-status { margin-top: 14px; font-size: 13px; color: var(--muted); }
+
+.topdf-sheetbar { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.topdf-count { font-size: 12px; color: var(--muted); margin-left: auto; }
+
+.topdf-sheets { display: flex; flex-wrap: wrap; gap: 8px; }
+.topdf-sheet {
+  display: inline-flex; align-items: center; gap: 8px; cursor: pointer;
+  border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px;
+  font-size: 12.5px; background: #fff; user-select: none;
+}
+.topdf-sheet.on { border-color: var(--green-2); background: #eef6ee; }
+.topdf-sheet input { accent-color: var(--green); }
+.topdf-sheet-name { font-weight: 600; color: #111827; }
+
+.topdf-actions { display: flex; gap: 10px; margin-top: 16px; }
+
+.topdf-done {
+  margin-top: 16px; background: #e8f3e8; color: #1f4e23; border: 1px solid #bcd8bc;
+  border-radius: 8px; padding: 12px 14px; font-size: 13px; font-weight: 600;
+}
