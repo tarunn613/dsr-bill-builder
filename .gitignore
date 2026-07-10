@@ -1,0 +1,18 @@
+# OS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Source PDFs — large, static, government-published reference data (221MB).
+# Kept on disk, not in git: avoids repo bloat, and voll_1.pdf (125MB) alone
+# exceeds GitHub's 100MB push limit. data/booklets/ must be populated locally.
+data/booklets/*.pdf
+
+# DB/xlsx backups — redundant once git tracks the originals' history
+*.bak
+
+# Pre-packaged source snapshots — redundant once git tracks source directly
+dsr-bill-builder-source.zip
+schedule-builder-src.zip
