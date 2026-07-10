@@ -5,6 +5,8 @@
 __pycache__/
 *.pyc
 
+.worktrees/
+
 # Source PDFs — large, static, government-published reference data (221MB).
 # Kept on disk, not in git: avoids repo bloat, and voll_1.pdf (125MB) alone
 # exceeds GitHub's 100MB push limit. data/booklets/ must be populated locally.
