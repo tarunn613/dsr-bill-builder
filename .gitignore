@@ -13,6 +13,7 @@ data/booklets/*.pdf
 # DB/xlsx backups — redundant once git tracks the originals' history
 *.bak
 
-# Pre-packaged source snapshots — redundant once git tracks source directly
-dsr-bill-builder-source.zip
+# Pre-packaged source snapshots (Windows-build transfer zips) — redundant
+# once git tracks source directly; wildcard covers versioned names too
+dsr-bill-builder-source*.zip
 schedule-builder-src.zip

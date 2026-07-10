@@ -6,9 +6,10 @@ import {
 const ACTIVE_KEY = 'activeSessionId';
 const SessionContext = createContext(null);
 
-// A tender project is always "active" so autosave always has a home and no work
-// is lost. Pages read the active session's saved state to hydrate, and push their
-// state back via saveSlice() (debounced) as the user works.
+// A session is NOT created automatically. The user explicitly starts a new tender
+// (naming it) or opens a saved one from the Home screen; until then there is no
+// active session. Once active, pages hydrate from its saved state and push changes
+// back via saveSlice() (debounced) as the user works.
 export function SessionProvider({ children }) {
   const [sessions, setSessions] = useState([]);
   const [dir, setDir] = useState('');
@@ -38,28 +39,17 @@ export function SessionProvider({ children }) {
     } catch { return []; }
   }, []);
 
-  // ---- bootstrap: decide the active session once ----
+  // ---- bootstrap: just load the list; do NOT auto-create or auto-select ----
   useEffect(() => {
     if (booted.current) return;
     booted.current = true;
     (async () => {
-      const list = await refreshList();
-      const stored = localStorage.getItem(ACTIVE_KEY);
-      if (stored && list.some((s) => s.id === stored)) {
-        setActive(stored);
-      } else if (list.length > 0) {
-        setActive(list[0].id); // most-recently-updated
-      } else {
-        try {
-          const s = await createSession('Untitled tender');
-          await refreshList();
-          setActive(s.id);
-          setSession(s);
-        } catch { /* backend down; pages fall back to no-session */ }
-      }
+      await refreshList();
+      // No session is opened automatically — the user starts or opens one on Home.
+      localStorage.removeItem(ACTIVE_KEY);
       setReady(true);
     })();
-  }, [refreshList, setActive]);
+  }, [refreshList]);
 
   // ---- load full active session whenever the active id changes ----
   useEffect(() => {
@@ -115,16 +105,9 @@ export function SessionProvider({ children }) {
 
   const removeSession = useCallback(async (id) => {
     await deleteSession(id);
-    const list = await refreshList();
-    if (activeIdRef.current === id) {
-      if (list.length > 0) setActive(list[0].id);
-      else {
-        const s = await createSession('Untitled tender');
-        await refreshList();
-        setActive(s.id);
-        setSession(s);
-      }
-    }
+    await refreshList();
+    // deleting the active tender just clears it — never auto-create a replacement
+    if (activeIdRef.current === id) { setActive(null); setSession(null); }
   }, [refreshList, setActive]);
 
   const importSession = useCallback(async (file) => {

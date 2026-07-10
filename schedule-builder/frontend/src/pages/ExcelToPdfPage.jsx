@@ -55,6 +55,7 @@ export default function ExcelToPdfPage() {
 
   return (
     <div className="page topdf-page">
+      <div className="page-pad">
       <div className="page-head">
         <h1>Excel → PDF</h1>
         <p className="page-sub">
@@ -118,6 +119,7 @@ export default function ExcelToPdfPage() {
 
       {err && <div className="home-err">{err}</div>}
       {done && <div className="topdf-done">✓ {done}</div>}
+      </div>
     </div>
   );
 }

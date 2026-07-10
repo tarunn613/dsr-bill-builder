@@ -30,7 +30,8 @@ export default function SessionsPage() {
   useEffect(() => { refreshList(); reloadActive(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function doCreate() {
-    const name = newName.trim() || 'Untitled tender';
+    const name = newName.trim();
+    if (!name) { setErr('Please enter a name for the tender first.'); return; }
     setBusy('create'); setErr('');
     try { await newSession(name); setCreating(false); setNewName(''); }
     catch (e) { setErr(e.message); }
@@ -95,7 +96,7 @@ export default function SessionsPage() {
                 value={newName} onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter') doCreate(); if (e.key === 'Escape') setCreating(false); }}
               />
-              <button className="primary" onClick={doCreate} disabled={busy === 'create'}>Create</button>
+              <button className="primary" onClick={doCreate} disabled={busy === 'create' || !newName.trim()}>Create</button>
               <button className="ghost" onClick={() => setCreating(false)}>Cancel</button>
             </div>
           )}
