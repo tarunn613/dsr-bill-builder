@@ -87,5 +87,10 @@ function search(q, limit = 25) {
   return scored.slice(0, limit).map(([, it]) => publicRow(it));
 }
 
-export { load, search, lookup, publicRow };
+// All items as public rows — used by the OCR matcher to build a code index.
+function all() {
+  return ITEMS.map(publicRow);
+}
+
+export { load, search, lookup, publicRow, all };
 export const meta = () => META;

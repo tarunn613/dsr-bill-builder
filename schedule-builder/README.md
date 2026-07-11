@@ -55,6 +55,37 @@ The backend reads a **JSON snapshot** of the DSR database (no native SQLite modu
 — robust across Node versions and clean to package). Re-generate it with
 `npm run sync-db` whenever `../dsr_database.db` is rebuilt.
 
+## OCR import (scan a Schedule of Work)
+
+On **DSR → Schedule**, *⤓ Import from PDF* opens a full-screen workspace that turns
+a scanned "Schedule of Work" into editable, DSR-matched rows.
+
+- **Rendering** happens in the browser (`frontend/src/ocr/renderPdf.js`, pdf.js).
+  Each page image is streamed to the backend one at a time so the modal shows a
+  real progress bar.
+- **Recognition** runs on-device in the backend (`backend/src/ocr-engines.js`):
+  `paddle` = PaddleOCR PP-OCRv4 (open weights via `@gutenye/ocr-node` /
+  onnxruntime-node — recommended, robust on skewed scans) and `tesseract` =
+  Tesseract.js (lighter fallback). A `vision` seam (`/api/ocr/vision`) is wired
+  for a local VLM / handwriting model, disabled until `OCR_VISION_ENDPOINT` +
+  `OCR_VISION_API_KEY` are set.
+- **Parsing + matching** (`backend/src/ocr.js`) reconstructs the ruled table from
+  the recognised token boxes and matches each code to the DSR DB by **digit
+  signature** — so it recovers codes even when OCR drops the dots (`1521` →
+  `15.2.1`) — with a description tiebreak. Low-confidence rows are flagged for
+  review; the user cross-checks against the page and edits before applying.
+
+Offline assets: Tesseract language data lives in `backend/ocr-assets/tessdata/`
+(the tracked `.gz`); PaddleOCR models ship inside `@gutenye/ocr-models`; the pdf.js
+worker is vendored to `frontend/public/ocr/` by the frontend `postinstall`.
+
+> **Packaging note:** the `paddle` engine pulls in **onnxruntime-node** (a large
+> native module). It runs fine in dev and inside the packaged app (the backend
+> ships as Electron `extraResources`, so the native `.node` loads without
+> asar-unpacking), but building the **Windows** installer requires the win32
+> onnxruntime-node binary to be present at build time. Tesseract has no native
+> dependency and always works.
+
 ## Run (development)
 
 ```bash
@@ -136,6 +167,10 @@ main (DSR + Appd.) → ×factor → +cost index → +MKT / −Recovery
 | GET  | `/api/dsr/:code` | exact lookup (all rate variants) |
 | POST | `/api/schedule/compute` · `/xlsx` · `/pdf` | live totals / Excel / PDF |
 | POST | `/api/bill/compute` · `/xlsx` · `/parse` | bill totals / Excel / parse upload |
+| POST | `/api/ocr/recognize` | OCR one page image (`engine`: `paddle` \| `tesseract`) → token boxes |
+| POST | `/api/ocr/parse` | reconstruct the table from tokens + match codes to the DSR DB |
+| POST | `/api/ocr/match` | re-match one edited code against the DSR DB |
+| GET  | `/api/ocr/engines` | which OCR engines can run on this device |
 | GET/POST | `/api/sessions` | list / create sessions |
 | GET/PUT/DELETE | `/api/sessions/:id` | load / autosave / delete |
 | GET | `/api/sessions/:id/exports/:exportId` | re-download an archived export |

@@ -5,3 +5,8 @@ backend/data/dsr_items.json
 .DS_Store
 desktop-dist/
 backend/data/sessions/
+
+# OCR: generated at install (postinstall) / cached at runtime — the tracked
+# eng.traineddata.gz is the offline source; the rest is reproducible.
+frontend/public/ocr/pdf.worker.min.mjs
+backend/ocr-assets/tessdata/eng.traineddata
