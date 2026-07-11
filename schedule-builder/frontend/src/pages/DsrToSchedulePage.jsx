@@ -3,6 +3,7 @@ import HeaderForm from '../components/HeaderForm.jsx';
 import DsrItemsSection, { newDsrItem } from '../components/DsrItemsSection.jsx';
 import MarketItemsSection, { newMarketItem } from '../components/MarketItemsSection.jsx';
 import SchedulePreview from '../components/SchedulePreview.jsx';
+import OcrImportModal from '../components/OcrImportModal.jsx';
 import { computeSchedule, downloadSchedule, getMeta } from '../api.js';
 import { sendScheduleToBill } from '../store.js';
 import { useSession } from '../SessionContext.jsx';
@@ -35,6 +36,7 @@ export default function DsrToSchedulePage() {
   const [meta, setMeta] = useState(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [ocrOpen, setOcrOpen] = useState(false);
   const timer = useRef(null);
 
   // ---- autosave this page's state into the active session (debounced) ----
@@ -79,6 +81,16 @@ export default function DsrToSchedulePage() {
     setMarketItems(Array.from({ length: Math.max(0, parseInt(nMkt, 10) || 0) }, newMarketItem));
   }
 
+  // Merge OCR-imported rows into the schedule (dropping any blank template rows),
+  // and adopt the factor / cost index if they were read off the sheet.
+  function handleOcrApply({ dsrItems: incomingDsr = [], marketItems: incomingMkt = [], meta: sheet = {} }) {
+    if (incomingDsr.length) setDsrItems((prev) => [...prev.filter(hasContent), ...incomingDsr]);
+    if (incomingMkt.length) setMarketItems((prev) => [...prev.filter(hasContent), ...incomingMkt]);
+    if (sheet.factor) setFactor(String(sheet.factor));
+    if (sheet.costIndexPct != null && sheet.costIndexPct !== '') setCostIndexPct(String(sheet.costIndexPct));
+    setError('');
+  }
+
   async function doExport(kind) {
     setBusy(kind); setError('');
     try {
@@ -115,11 +127,14 @@ export default function DsrToSchedulePage() {
           <div className="fig"><span>Say</span><b>₹ {computed ? fmt(computed.say) : '0'}</b></div>
         </div>
         <div className="topbar-actions">
+          <button className="ghost" onClick={() => setOcrOpen(true)} title="scan a printed/scanned Schedule of Work PDF and extract its DSR items">⤓ Import from PDF</button>
           <button className="ghost" disabled={busy} onClick={() => doExport('xlsx')}>{busy === 'xlsx' ? '…' : 'Export Excel'}</button>
           <button className="ghost" disabled={busy} onClick={() => doExport('pdf')}>{busy === 'pdf' ? '…' : 'Export PDF'}</button>
           <button className="primary" onClick={toBill} title="carry this schedule into the bill builder">Send to Bill →</button>
         </div>
       </div>
+
+      {ocrOpen && <OcrImportModal onClose={() => setOcrOpen(false)} onApply={handleOcrApply} />}
 
       {error && <div className="banner err">{error}</div>}
 

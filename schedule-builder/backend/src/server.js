@@ -12,6 +12,8 @@ import { buildBillWorkbook } from './bill-excel.js';
 import { parseScheduleBuffer } from './bill-parse.js';
 import { renderWorkbookToZip, listSheetNames } from './xlsx-pdf.js';
 import { coeffsFor, searchByDesc, searchByCode, searchCombined } from './cement.js';
+import { parseDocument, matchCode, visionExtract, visionConfigured } from './ocr.js';
+import { recognizePage, engineStatus } from './ocr-engines.js';
 import {
   listSessions, createSession, getSession, updateSession, deleteSession,
   archiveExport, getExportFile, recordImport, packageSession, importSessionPackage,
@@ -41,6 +43,67 @@ app.get('/api/dsr/:code', (req, res) => {
   const rows = lookup(req.params.code);
   if (!rows.length) return res.status(404).json({ error: 'code not found', code: req.params.code });
   res.json({ code: req.params.code, matches: rows });
+});
+
+// ---- OCR import: scanned Schedule of Work -> matched DSR rows --------------
+// The frontend rasterises the scanned PDF and posts page images here one at a
+// time (so it can show real progress); we OCR each with the chosen on-device
+// engine, then reconstruct the table and match every code against the DSR DB.
+app.get('/api/ocr/engines', async (req, res) => {
+  try { res.json(await engineStatus()); }
+  catch (e) { res.status(500).json({ error: String(e.message || e) }); }
+});
+
+// OCR a single page image → token boxes for the parser.
+app.post('/api/ocr/recognize', async (req, res) => {
+  try {
+    const { engine = 'paddle', page } = req.body || {};
+    if (!page || !page.dataUrl) return res.status(400).json({ error: 'no page image' });
+    const buffer = Buffer.from(String(page.dataUrl).replace(/^data:.*;base64,/, ''), 'base64');
+    const tokens = await recognizePage(engine, buffer);
+    res.json({ index: page.index, width: page.width, height: page.height, ...tokens });
+  } catch (e) {
+    console.error('ocr recognize:', e.message);
+    const code = e && e.code === 'PADDLE_UNAVAILABLE' ? 501 : 500;
+    res.status(code).json({ error: String(e.message || e), code: e && e.code });
+  }
+});
+
+// Reconstruct the table from all pages' tokens and match against the DSR DB.
+app.post('/api/ocr/parse', (req, res) => {
+  try {
+    const pages = (req.body && req.body.pages) || [];
+    if (!Array.isArray(pages) || !pages.length) return res.status(400).json({ error: 'no pages' });
+    res.json(parseDocument(pages));
+  } catch (e) {
+    console.error(e);
+    res.status(400).json({ error: 'could not parse OCR output: ' + String(e.message || e) });
+  }
+});
+
+// Re-match a single (edited) code against the DSR DB — used when the user fixes
+// a code in the review table and we want the canonical description/unit/rate.
+app.post('/api/ocr/match', (req, res) => {
+  try {
+    const { code = '', description = '' } = req.body || {};
+    res.json(matchCode(String(code), String(description)));
+  } catch (e) {
+    res.status(400).json({ error: String(e.message || e) });
+  }
+});
+
+// Vision-model OCR seam (local VLM server / handwriting). Not active until a
+// local endpoint is configured — see ocr.js. Kept here so the engine selector
+// can offer it and fail with a clear, actionable message.
+app.get('/api/ocr/vision/status', (req, res) => res.json({ configured: visionConfigured() }));
+app.post('/api/ocr/vision', async (req, res) => {
+  try {
+    const out = await visionExtract((req.body && req.body.pages) || [], req.body || {});
+    res.json(out);
+  } catch (e) {
+    const code = e && e.code === 'VISION_NOT_CONFIGURED' ? 501 : 500;
+    res.status(code).json({ error: String(e.message || e), code: e && e.code });
+  }
 });
 
 app.post('/api/schedule/compute', (req, res) => {

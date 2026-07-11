@@ -197,6 +197,28 @@ function ScheduleHelp() {
         ]}
       />
 
+      <h3 className="help-h3">Import from a scanned PDF (OCR)</h3>
+      <p>
+        Already have a printed or scanned <b>Schedule of Work</b>? Click{' '}
+        <b>⤓ Import from PDF</b> at the top. The app reads each page, pulls out the
+        DSR codes and quantities, and matches every code against the database — so you
+        can rebuild a schedule from an old bill in seconds instead of retyping it.
+      </p>
+      <StepList
+        items={[
+          { title: 'Choose the PDF and a recognition engine', desc: 'High accuracy (PaddleOCR, open-source) suits most scans; Built-in (Tesseract) is lighter; AI Vision is for handwriting once a local model server is set up' },
+          { title: 'Watch it recognise each page', desc: 'a progress bar covers rendering, reading text, then matching to the DSR database' },
+          { title: 'Review every row', desc: 'green “Matched” rows are confident; amber rows need a look — click the page number to see the original scan' },
+          { title: 'Fix anything the scan got wrong', desc: 'edit the code, quantity or description inline; ambiguous codes offer a dropdown of the likely options' },
+          { title: 'Add to schedule', desc: 'the selected rows drop straight into the item list, and a factor / cost index detected on the sheet is filled in for you' },
+        ]}
+      />
+      <Callout tone="blue" title="Always cross-check before adding">
+        OCR is a big time-saver but not perfect — especially on faint or skewed scans.
+        Amber rows, and any quantity that looks off, should be checked against the page
+        (use the page-number link) before you add them. Every field stays editable.
+      </Callout>
+
       <h3 className="help-h3">Item types</h3>
       <Legend
         items={[
@@ -347,6 +369,14 @@ function Tips() {
         <div className="faq-item">
           <div className="faq-q">A DSR rate looks wrong for my tender — can I fix it?</div>
           <div className="faq-a">Don't edit the database. Use the rate <b>override</b> on that line (Schedule page) — see the Overview tab for why.</div>
+        </div>
+        <div className="faq-item">
+          <div className="faq-q">Can I build a schedule from a scanned or printed bill?</div>
+          <div className="faq-a">Yes — on <b>DSR → Schedule</b>, click <b>⤓ Import from PDF</b>. It reads the pages, matches DSR codes and quantities, and lets you review and fix everything before adding. It works offline; nothing is uploaded. Always cross-check amber rows against the scan.</div>
+        </div>
+        <div className="faq-item">
+          <div className="faq-q">The scan is handwritten — will OCR read it?</div>
+          <div className="faq-a">Printed schedules read well. For handwriting, the <b>AI Vision</b> engine is the right tool, but it needs a local AI model server configured on the device first (a future setup step) — until then it's shown as “Setup required”.</div>
         </div>
       </div>
 

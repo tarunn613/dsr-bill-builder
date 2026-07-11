@@ -11,10 +11,12 @@
     "sync-db": "python ../export_dsr_json.py"
   },
   "dependencies": {
+    "@gutenye/ocr-node": "^1.4.8",
     "adm-zip": "^0.5.18",
     "cors": "^2.8.5",
     "exceljs": "^4.4.0",
     "express": "^4.21.2",
-    "pdfkit": "^0.15.0"
+    "pdfkit": "^0.15.0",
+    "tesseract.js": "^7.0.0"
   }
 }
