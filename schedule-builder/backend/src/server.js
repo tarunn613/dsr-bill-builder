@@ -14,6 +14,7 @@ import { renderWorkbookToZip, listSheetNames } from './xlsx-pdf.js';
 import { coeffsFor, searchByDesc, searchByCode, searchCombined } from './cement.js';
 import { parseDocument, matchCode, visionExtract, visionConfigured } from './ocr.js';
 import { recognizePage, engineStatus } from './ocr-engines.js';
+import { parseJsonImport, matchJsonRow } from './json-import.js';
 import {
   listSessions, createSession, getSession, updateSession, deleteSession,
   archiveExport, getExportFile, recordImport, packageSession, importSessionPackage,
@@ -106,6 +107,28 @@ app.post('/api/ocr/vision', async (req, res) => {
   }
 });
 
+// ---- JSON import: paste vision-model JSON -> matched DSR rows -------------
+// Companion to the OCR import above, for a "Schedule of Work" already read
+// by a vision AI model (Claude / GPT-4V / Gemini) into the app's fixed JSON
+// shape (see json-import.js). No file upload, no OCR — just DB matching.
+app.post('/api/json-import/parse', (req, res) => {
+  try {
+    res.json(parseJsonImport((req.body && req.body.text) || ''));
+  } catch (e) {
+    res.status(400).json({ error: String(e.message || e) });
+  }
+});
+
+// Re-match a single (edited) code against the DSR DB — same use as /api/ocr/match.
+app.post('/api/json-import/match', (req, res) => {
+  try {
+    const { code = '', description = '' } = req.body || {};
+    res.json(matchJsonRow(String(code), String(description)));
+  } catch (e) {
+    res.status(400).json({ error: String(e.message || e) });
+  }
+});
+
 app.post('/api/schedule/compute', (req, res) => {
   try {
     res.json(computeSchedule(req.body || {}));
@@ -119,18 +142,6 @@ function safeName(header = {}) {
   return base.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '').slice(0, 60) || 'schedule';
 }
 
-// If a sessionId rode along on an export request, archive a copy into that
-// session so the user can re-download it later. Never let archiving failures
-// block the download the user actually asked for.
-function archiveIfSession(sessionId, page, kind, filename, buffer) {
-  if (!sessionId) return;
-  try {
-    archiveExport(sessionId, { page, kind, filename, buffer });
-  } catch (e) {
-    console.error('archiveExport failed:', e.message);
-  }
-}
-
 app.post('/api/schedule/xlsx', async (req, res) => {
   try {
     const payload = req.body || {};
@@ -138,7 +149,6 @@ app.post('/api/schedule/xlsx', async (req, res) => {
     const wb = buildScheduleWorkbook(computed, payload.header || {});
     const buf = Buffer.from(await wb.xlsx.writeBuffer());
     const filename = `${safeName(payload.header)}_schedule.xlsx`;
-    archiveIfSession(payload.sessionId, 'schedule', 'xlsx', filename, buf);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buf);
@@ -154,7 +164,6 @@ app.post('/api/schedule/pdf', async (req, res) => {
     const computed = computeSchedule(payload);
     const buf = await buildSchedulePdf(computed, payload.header || {});
     const filename = `${safeName(payload.header)}_schedule.pdf`;
-    archiveIfSession(payload.sessionId, 'schedule', 'pdf', filename, buf);
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buf);
@@ -179,7 +188,6 @@ app.post('/api/bill/xlsx', async (req, res) => {
     const wb = buildBillWorkbook(payload);
     const buf = Buffer.from(await wb.xlsx.writeBuffer());
     const filename = `${safeName(payload.meta || {})}_ra_bill.xlsx`;
-    archiveIfSession(payload.sessionId, 'bill', 'xlsx', filename, buf);
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(buf);
@@ -273,7 +281,6 @@ app.post('/api/topdf', async (req, res) => {
     if (!rendered.length) return res.status(400).json({ error: 'no non-empty sheets to convert' });
     const base = String(req.body.filename || 'workbook').replace(/\.[^.]+$/, '').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'workbook';
     const filename = `${base}_pdf.zip`;
-    archiveIfSession(req.body.sessionId, 'topdf', 'zip', filename, zipBuffer);
     res.setHeader('Content-Type', 'application/zip');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.send(zipBuffer);
@@ -315,6 +322,22 @@ app.delete('/api/sessions/:id', (req, res) => {
     const ok = deleteSession(req.params.id);
     if (!ok) return res.status(404).json({ error: 'session not found' });
     res.json({ ok: true });
+  } catch (e) { res.status(400).json({ error: String(e.message || e) }); }
+});
+
+// Archive an already-generated export under the session, once the user has
+// confirmed its filename in the Save-as dialog (kept as a separate step from
+// generating the file — see downloadSchedule/downloadBill/convertXlsxToPdf in
+// api.js — so the archived copy's name matches what was actually saved, not
+// whatever default the backend originally suggested).
+app.post('/api/sessions/:id/exports', (req, res) => {
+  try {
+    const { page, kind, filename, fileBase64 } = req.body || {};
+    if (!filename || !fileBase64) return res.status(400).json({ error: 'filename and fileBase64 are required' });
+    const buffer = Buffer.from(String(fileBase64).replace(/^data:.*;base64,/, ''), 'base64');
+    const rec = archiveExport(req.params.id, { page, kind, filename, buffer });
+    if (!rec) return res.status(404).json({ error: 'session not found' });
+    res.status(201).json(rec);
   } catch (e) { res.status(400).json({ error: String(e.message || e) }); }
 });
 

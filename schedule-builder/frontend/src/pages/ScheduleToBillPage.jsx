@@ -3,7 +3,8 @@ import BillScheduleTab, { newBillRow } from '../components/bill/BillScheduleTab.
 import BillReTab from '../components/bill/BillReTab.jsx';
 import BillAbstractTab from '../components/bill/BillAbstractTab.jsx';
 import BillCementTab from '../components/bill/BillCementTab.jsx';
-import { computeBill, downloadBill, parseScheduleFile, lookupCementCoeffs } from '../api.js';
+import SaveAsDialog from '../components/SaveAsDialog.jsx';
+import { computeBill, downloadBill, saveBlob, archiveExport, parseScheduleFile, lookupCementCoeffs } from '../api.js';
 import { takeBillHandoff, clearBillHandoff } from '../store.js';
 import { useSession } from '../SessionContext.jsx';
 
@@ -54,6 +55,7 @@ export default function ScheduleToBillPage() {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState('');
   const [statusKind, setStatusKind] = useState('');
+  const [pendingSave, setPendingSave] = useState(null); // { blob, defaultName }
   const timer = useRef(null);
 
   // ---- autosave this page's state into the active session (debounced) ----
@@ -202,9 +204,8 @@ export default function ScheduleToBillPage() {
   async function onExport() {
     setBusy(true); setStatus('');
     try {
-      await downloadBill({ ...payload, sessionId: activeId });
-      await reloadActive(); // reflect the archived export in the session
-      setStatus('Bill workbook exported.'); setStatusKind('ok');
+      const { blob, defaultName } = await downloadBill(payload);
+      setPendingSave({ blob, defaultName });
     } catch (e) { setStatus('Export failed. Is the backend running?'); setStatusKind('err'); }
     finally { setBusy(false); }
   }
@@ -227,6 +228,19 @@ export default function ScheduleToBillPage() {
       </div>
 
       {status && <div className={'banner ' + (statusKind === 'err' ? 'err' : statusKind === 'ok' ? 'ok' : '')}>{status}</div>}
+      {pendingSave && (
+        <SaveAsDialog
+          defaultName={pendingSave.defaultName}
+          onConfirm={async (filename) => {
+            saveBlob(pendingSave.blob, filename);
+            setPendingSave(null);
+            setStatus('Bill workbook exported.'); setStatusKind('ok');
+            await archiveExport(activeId, { page: 'bill', kind: 'xlsx', filename, blob: pendingSave.blob });
+            await reloadActive(); // reflect the archived export in the session
+          }}
+          onCancel={() => setPendingSave(null)}
+        />
+      )}
 
       <main className="bill-main">
         <section className="card">

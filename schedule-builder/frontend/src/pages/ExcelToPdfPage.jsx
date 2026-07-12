@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
-import { listXlsxSheets, convertXlsxToPdf } from '../api.js';
+import { listXlsxSheets, convertXlsxToPdf, saveBlob, archiveExport } from '../api.js';
 import { useSession } from '../SessionContext.jsx';
+import SaveAsDialog from '../components/SaveAsDialog.jsx';
 
 // Convert an uploaded .xlsx (Schedule / RE / Abstract / Cement, or any workbook)
 // into clean black-&-white, A4-fit PDFs — one per sheet, delivered as a zip.
@@ -12,6 +13,7 @@ export default function ExcelToPdfPage() {
   const [busy, setBusy] = useState(false);       // 'reading' | 'converting' | false
   const [err, setErr] = useState('');
   const [done, setDone] = useState('');
+  const [pendingSave, setPendingSave] = useState(null); // { blob, defaultName }
 
   async function pickFile(f) {
     setErr(''); setDone(''); setSheets([]); setFile(null);
@@ -40,9 +42,8 @@ export default function ExcelToPdfPage() {
     if (!file || !selected.length) return;
     setBusy('converting'); setErr(''); setDone('');
     try {
-      const name = await convertXlsxToPdf(file, selected, session?.id);
-      setDone(`Downloaded ${name} — ${selected.length} PDF${selected.length === 1 ? '' : 's'} inside.`);
-      if (session?.id) reloadActive();
+      const { blob, defaultName } = await convertXlsxToPdf(file, selected);
+      setPendingSave({ blob, defaultName, count: selected.length });
     } catch (e) {
       setErr(e.message || 'Could not convert the workbook.');
     } finally { setBusy(false); }
@@ -119,6 +120,21 @@ export default function ExcelToPdfPage() {
 
       {err && <div className="home-err">{err}</div>}
       {done && <div className="topdf-done">✓ {done}</div>}
+      {pendingSave && (
+        <SaveAsDialog
+          defaultName={pendingSave.defaultName}
+          onConfirm={async (filename) => {
+            saveBlob(pendingSave.blob, filename);
+            setDone(`Downloaded ${filename} — ${pendingSave.count} PDF${pendingSave.count === 1 ? '' : 's'} inside.`);
+            setPendingSave(null);
+            if (session?.id) {
+              await archiveExport(session.id, { page: 'topdf', kind: 'zip', filename, blob: pendingSave.blob });
+              await reloadActive();
+            }
+          }}
+          onCancel={() => setPendingSave(null)}
+        />
+      )}
       </div>
     </div>
   );

@@ -15,6 +15,14 @@ function blockTotal(list) {
 }
 const newMeasRow = () => ({ label: '', n: '', f: '', l: '', w: '', h: '' });
 
+function BlockHead({ itemNo, item }) {
+  return (
+    <div className="reblk-head">
+      <span><b>Item {itemNo}</b> — {item.description || <i>(no description)</i>} {item.unit && <em>({item.unit})</em>}</span>
+    </div>
+  );
+}
+
 function Block({ item, itemNo, list, setList }) {
   const rows = list && list.length ? list : [newMeasRow()];
   const patch = (j, ch) => setList(rows.map((r, k) => (k === j ? { ...r, ...ch } : r)));
@@ -24,9 +32,7 @@ function Block({ item, itemNo, list, setList }) {
 
   return (
     <div className="reblk">
-      <div className="reblk-head">
-        <span><b>Item {itemNo}</b> — {item.description || <i>(no description)</i>} {item.unit && <em>({item.unit})</em>}</span>
-      </div>
+      <BlockHead itemNo={itemNo} item={item} />
       <table className="items-table re-table">
         <thead>
           <tr>
@@ -62,17 +68,34 @@ function Block({ item, itemNo, list, setList }) {
   );
 }
 
+// MKT / Recovery items aren't measured — the calc chain bills them at their
+// scheduled quantity (see bill-core.js's computeBill), so there's nothing to
+// enter here. Mirrors the same "at par" line bill-excel.js writes to the RE
+// sheet, just so the on-screen preview isn't silently missing these items.
+function AtParBlock({ item, itemNo }) {
+  return (
+    <div className="reblk">
+      <BlockHead itemNo={itemNo} item={item} />
+      <div className="reblk-atpar">
+        <span className="hint">Quantity as per Schedule (billed at par)</span>
+        <b>{item.qty === '' || item.qty == null ? '—' : item.qty}{item.unit ? ` ${item.unit}` : ''}</b>
+      </div>
+    </div>
+  );
+}
+
 export default function BillReTab({ rows, measById, setMeasById }) {
-  const mainRows = rows.map((r, i) => ({ r, i })).filter((x) => isMain(x.r.category));
-  if (!mainRows.length) return <div className="empty">Add DSR / Appd. items in the Schedule tab first.</div>;
+  if (!rows.length) return <div className="empty">Add items in the Schedule tab first.</div>;
   return (
     <div>
       <div className="bar"><strong>RE — Record of Measurements</strong>
-        <span className="hint">Qty = Nos × Factor × L × W × H (blanks = 1). Use a negative “Nos” for “less” deductions.</span></div>
-      {mainRows.map(({ r, i }) => (
-        <Block key={r.id} item={r} itemNo={i + 1}
-          list={measById[r.id]}
-          setList={(list) => setMeasById({ ...measById, [r.id]: list })} />
+        <span className="hint">Qty = Nos × Factor × L × W × H (blanks = 1). Use a negative “Nos” for “less” deductions. MKT / Recovery items are billed at their scheduled quantity, not measured here.</span></div>
+      {rows.map((r, i) => (
+        isMain(r.category)
+          ? <Block key={r.id} item={r} itemNo={i + 1}
+              list={measById[r.id]}
+              setList={(list) => setMeasById({ ...measById, [r.id]: list })} />
+          : <AtParBlock key={r.id} item={r} itemNo={i + 1} />
       ))}
     </div>
   );

@@ -123,23 +123,32 @@ export default function SessionsPage() {
                     ) : (
                       <>
                         <div className="sr-title">
-                          {isActive && <span className="badge">ACTIVE</span>}
+                          {isActive && <span className="badge">Active</span>}
                           <b>{s.name}</b>
                         </div>
                         <div className="sr-meta">
-                          Saved {fmtDate(s.updatedAt)} · {s.scheduleItems} schedule · {s.billItems} bill · {s.exports} export{s.exports === 1 ? '' : 's'}
+                          {fmtDate(s.updatedAt)} · {s.scheduleItems} schedule · {s.billItems} bill · {s.exports} export{s.exports === 1 ? '' : 's'}
                         </div>
                       </>
                     )}
                   </div>
-                  <div className="sr-actions">
-                    {!isActive && <button className="secondary sm" onClick={() => setActive(s.id)}>Open</button>}
-                    {isActive && <a className="btnlink sm" href="#/schedule">→ Schedule</a>}
-                    {isActive && <a className="btnlink sm" href="#/bill">→ Bill</a>}
-                    <button className="ghost sm" onClick={() => { setRenaming(s.id); setRenameVal(s.name); }}>Rename</button>
-                    <button className="ghost sm" onClick={() => browserDownload(sessionPackageUrl(s.id))} title="Save this tender as a single .dbill file">Export</button>
-                    <button className="ghost sm danger" onClick={() => doDelete(s)} disabled={busy === 'del' + s.id}>Delete</button>
-                  </div>
+                  {renaming !== s.id && (
+                    <div className="sr-actions">
+                      {isActive ? (
+                        <div className="sr-nav">
+                          <a className="btnlink sm" href="#/schedule">Schedule</a>
+                          <a className="btnlink sm" href="#/bill">Bill</a>
+                        </div>
+                      ) : (
+                        <button className="primary sm" onClick={() => setActive(s.id)}>Open</button>
+                      )}
+                      <div className="sr-manage">
+                        <button className="icon-btn" title="Rename" onClick={() => { setRenaming(s.id); setRenameVal(s.name); }}>✎</button>
+                        <button className="icon-btn" title="Save as a .dbill file" onClick={() => browserDownload(sessionPackageUrl(s.id))}>⬇</button>
+                        <button className="icon-btn danger" title="Delete tender" onClick={() => doDelete(s)} disabled={busy === 'del' + s.id}>🗑</button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}
@@ -167,7 +176,7 @@ export default function SessionsPage() {
                       <td className="up">{e.kind}</td>
                       <td>{fmtBytes(e.bytes)}</td>
                       <td>{fmtDate(e.at)}</td>
-                      <td><button className="secondary sm" onClick={() => browserDownload(sessionExportUrl(session.id, e.id))}>Download</button></td>
+                      <td className="dl"><button className="icon-btn" title="Download" onClick={() => browserDownload(sessionExportUrl(session.id, e.id))}>⬇</button></td>
                     </tr>
                   ))}
                 </tbody>

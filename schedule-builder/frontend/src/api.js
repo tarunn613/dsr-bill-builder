@@ -1,6 +1,40 @@
 // Tiny fetch wrapper for the local backend API.
 const JSON_HEADERS = { 'Content-Type': 'application/json' };
 
+// Triggers a browser save of `blob` under `filename`. Call this once the user
+// has confirmed a name in <SaveAsDialog> (see components/SaveAsDialog.jsx) —
+// these two are split so pages can show that dialog between fetching the
+// export and actually saving it.
+export function saveBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 4000);
+}
+
+// Archive an export into a session under its final, user-chosen filename —
+// called after saveBlob(), once <SaveAsDialog> has confirmed a name, so the
+// copy shown on the Sessions page matches what was actually saved locally.
+// A no-op with no active session; never throws (an archiving failure
+// shouldn't undo the download the user already has).
+export async function archiveExport(sessionId, { page, kind, filename, blob }) {
+  if (!sessionId) return;
+  try {
+    const fileBase64 = await fileToBase64(blob);
+    const res = await fetch(`/api/sessions/${sessionId}/exports`, {
+      method: 'POST', headers: JSON_HEADERS,
+      body: JSON.stringify({ page, kind, filename, fileBase64 }),
+    });
+    if (!res.ok) throw new Error(`archive failed (${res.status})`);
+  } catch (e) {
+    console.error('archiveExport failed:', e.message || e);
+  }
+}
+
 export async function searchDsr(q, limit = 25) {
   if (!q || !q.trim()) return [];
   const res = await fetch(`/api/dsr/search?q=${encodeURIComponent(q)}&limit=${limit}`);
@@ -26,6 +60,9 @@ export async function computeSchedule(payload) {
   return res.json();
 }
 
+// Fetches the export and returns { blob, defaultName } — the caller shows
+// <SaveAsDialog> for the user to confirm/edit defaultName, then calls
+// saveBlob(blob, chosenName).
 export async function downloadSchedule(kind, payload) {
   const res = await fetch(`/api/schedule/${kind}`, {
     method: 'POST',
@@ -36,15 +73,8 @@ export async function downloadSchedule(kind, payload) {
   const blob = await res.blob();
   const disp = res.headers.get('Content-Disposition') || '';
   const m = disp.match(/filename="?([^"]+)"?/);
-  const filename = m ? m[1] : `schedule.${kind === 'xlsx' ? 'xlsx' : 'pdf'}`;
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  const defaultName = m ? m[1] : `schedule.${kind === 'xlsx' ? 'xlsx' : 'pdf'}`;
+  return { blob, defaultName };
 }
 
 // ---- Phase 3: bill --------------------------------------------------------
@@ -56,6 +86,7 @@ export async function computeBill(payload) {
   return res.json();
 }
 
+// Fetches the export and returns { blob, defaultName } — see downloadSchedule.
 export async function downloadBill(payload) {
   const res = await fetch('/api/bill/xlsx', {
     method: 'POST', headers: JSON_HEADERS, body: JSON.stringify(payload),
@@ -64,12 +95,8 @@ export async function downloadBill(payload) {
   const blob = await res.blob();
   const disp = res.headers.get('Content-Disposition') || '';
   const m = disp.match(/filename="?([^"]+)"?/);
-  const filename = m ? m[1] : 'ra_bill.xlsx';
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
+  const defaultName = m ? m[1] : 'ra_bill.xlsx';
+  return { blob, defaultName };
 }
 
 function fileToBase64(file) {
@@ -108,6 +135,7 @@ export async function listXlsxSheets(file) {
   return (await res.json()).sheets || [];
 }
 
+// Fetches the export and returns { blob, defaultName } — see downloadSchedule.
 export async function convertXlsxToPdf(file, sheets, sessionId) {
   const b64 = await fileToBase64(file);
   const res = await fetch('/api/topdf', {
@@ -121,13 +149,8 @@ export async function convertXlsxToPdf(file, sheets, sessionId) {
   const blob = await res.blob();
   const disp = res.headers.get('Content-Disposition') || '';
   const m = disp.match(/filename="?([^"]+)"?/);
-  const filename = m ? m[1] : 'workbook_pdf.zip';
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
-  return filename;
+  const defaultName = m ? m[1] : 'workbook_pdf.zip';
+  return { blob, defaultName };
 }
 
 export async function lookupCementCoeffs(codes) {
@@ -171,6 +194,26 @@ export async function searchCementCombined(query, limit = 10) {
     if (!res.ok) return [];
     return (await res.json()).results || [];
   } catch { return []; }
+}
+
+// ---- JSON import (paste vision-AI JSON of a Schedule of Work) -------------
+export async function parseJsonImport(text) {
+  const res = await fetch('/api/json-import/parse', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ text }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'could not parse that JSON');
+  return data;
+}
+
+export async function rematchJsonRow(code, description) {
+  try {
+    const res = await fetch('/api/json-import/match', {
+      method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ code, description }),
+    });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
 }
 
 export async function getMeta() {

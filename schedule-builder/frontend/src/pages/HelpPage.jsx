@@ -219,6 +219,27 @@ function ScheduleHelp() {
         (use the page-number link) before you add them. Every field stays editable.
       </Callout>
 
+      <h3 className="help-h3">Import from JSON (vision AI)</h3>
+      <p>
+        Already ran a scanned or digital Schedule of Work through your own vision AI
+        model (Claude, GPT-4V, Gemini…)? Click <b>{'{ }'} Import from JSON</b> at the
+        top and paste its output straight in — no file upload, no on-device OCR.
+      </p>
+      <StepList
+        items={[
+          { title: 'Copy the built-in prompt', desc: 'expand “Prompt to generate this JSON…” in the modal and give it to your vision model together with the PDF/images' },
+          { title: 'Paste the JSON it returns', desc: 'the exact shape the prompt asks for — standard_items (type "DSR") and special_items (type "MKT" or "Appd.")' },
+          { title: 'Click “Parse JSON”', desc: 'DSR items are matched against the database the same way OCR import does; Appd./MKT items keep the description, unit and rate straight from the JSON, since those aren’t in any book' },
+          { title: 'Review every row', desc: 'green “Matched” rows are confident; amber rows were guessed by description (no code) or ambiguous — fix the code or pick from the dropdown' },
+          { title: 'Add to schedule', desc: 'rows are added in the JSON’s own s_no order, so the schedule comes out in the same sequence as the source document' },
+        ]}
+      />
+      <p className="hint">
+        Works alongside <b>Import from PDF</b> — use whichever is easier to get a JSON
+        reading of your sheet from; both land in the same review table before anything
+        touches the schedule.
+      </p>
+
       <h3 className="help-h3">Item types</h3>
       <Legend
         items={[
@@ -377,6 +398,10 @@ function Tips() {
         <div className="faq-item">
           <div className="faq-q">The scan is handwritten — will OCR read it?</div>
           <div className="faq-a">Printed schedules read well. For handwriting, the <b>AI Vision</b> engine is the right tool, but it needs a local AI model server configured on the device first (a future setup step) — until then it's shown as “Setup required”.</div>
+        </div>
+        <div className="faq-item">
+          <div className="faq-q">I already used ChatGPT/Claude/Gemini to read my schedule — can I skip OCR?</div>
+          <div className="faq-a">Yes — on <b>DSR → Schedule</b>, click <b>{'{ }'} Import from JSON</b>. Copy the built-in prompt to your vision model of choice, paste the JSON it returns, and review the matched rows before adding. It never leaves your device beyond whatever tool you pasted the JSON from.</div>
         </div>
       </div>
 

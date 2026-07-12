@@ -245,6 +245,7 @@ button.ghost:hover, .upload-btn:hover { background: #eef6ee; }
 .re-table tr.less td { background: #fff5f5; }
 .re-table tr.less .c-amt { color: #b91c1c; }
 .re-table tr.totrow td { background: #ecfdf5; font-weight: 700; }
+.reblk-atpar { display: flex; align-items: center; justify-content: space-between; padding: 10px 13px; font-size: 12.5px; }
 .add-btn.sm { margin: 6px 0 10px 10px; padding: 5px 10px; font-size: 12px; }
 .recovery td { }
 
@@ -257,26 +258,32 @@ button.ghost:hover, .upload-btn:hover { background: #eef6ee; }
   box-shadow: 0 0 0 3px rgba(143,240,164,.25); }
 .active-session .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-.sessions-main { padding: 16px 20px; display: flex; flex-direction: column; gap: 14px; max-width: 1100px; width: 100%; margin: 0 auto; }
-.sessions-main h3.sub { margin: 14px 0 6px; font-size: 13px; color: var(--green); }
+.sessions-main { padding: 20px 24px; display: flex; flex-direction: column; gap: 18px; max-width: 1100px; width: 100%; margin: 0 auto; }
+.sessions-main .card { padding: 18px 20px; }
+.sessions-main h3.sub { margin: 18px 0 8px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.sessions-main h3.sub:first-of-type { margin-top: 4px; }
 .new-session-row { display: flex; gap: 8px; margin-bottom: 12px; }
 .new-session-row input { flex: 1; padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; font-size: 13px; }
 
-.session-list { display: flex; flex-direction: column; gap: 8px; }
-.session-row { display: flex; align-items: center; gap: 12px; padding: 11px 13px;
-  border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.session-list { display: flex; flex-direction: column; gap: 6px; }
+.session-row { display: flex; align-items: center; gap: 16px; padding: 12px 14px;
+  border: 1px solid transparent; border-radius: 8px; background: #fff; transition: background .12s, border-color .12s; }
+.session-row:hover { background: #fafbfa; }
 .session-row.active { border-color: var(--green-2); background: #f4faf4; box-shadow: inset 3px 0 0 var(--green-2); }
 .session-row .sr-main { flex: 1; min-width: 0; }
 .sr-title { display: flex; align-items: center; gap: 8px; }
 .sr-title b { font-size: 14px; color: #111827; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.badge { font-size: 9.5px; font-weight: 800; letter-spacing: .5px; color: #fff; background: var(--green-2);
-  padding: 2px 7px; border-radius: 999px; flex: none; }
+.badge { font-size: 9.5px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--green-2); background: #e3f1e4;
+  padding: 2px 8px; border-radius: 999px; flex: none; }
 .sr-meta { color: var(--muted); font-size: 11.5px; margin-top: 3px; }
-.sr-actions { display: flex; gap: 5px; flex: none; flex-wrap: wrap; justify-content: flex-end; }
-.rename-row { display: flex; gap: 6px; align-items: center; }
-.rename-row input { padding: 6px 9px; border: 1px solid var(--green-2); border-radius: 5px; font-size: 13px; min-width: 240px; }
+.sr-actions { display: flex; align-items: center; gap: 10px; flex: none; }
+.sr-nav { display: flex; gap: 6px; }
+.sr-manage { display: flex; align-items: center; gap: 1px; padding-left: 10px; border-left: 1px solid var(--line); }
+.rename-row { display: flex; gap: 6px; align-items: center; flex: 1; }
+.rename-row input { padding: 6px 9px; border: 1px solid var(--green-2); border-radius: 5px; font-size: 13px; flex: 1; min-width: 0; }
 
 button.sm, .btnlink.sm { font-size: 12px; padding: 5px 10px; }
+button.primary.sm { padding: 6px 12px; border-radius: 6px; }
 .btnlink { display: inline-flex; align-items: center; background: #fff; color: var(--green);
   border: 1px solid var(--green-2); border-radius: 6px; font-weight: 600; text-decoration: none; }
 .btnlink:hover { background: #eef6ee; }
@@ -284,11 +291,21 @@ button.ghost.danger { color: #b91c1c; border-color: #e6a2a2; }
 button.ghost.danger:hover { background: #fde8e8; }
 .empty.sm { padding: 8px; font-size: 12px; }
 
+.icon-btn { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px;
+  border-radius: 6px; background: transparent; border: 1px solid transparent; color: var(--muted);
+  cursor: pointer; font-size: 13px; line-height: 1; padding: 0; }
+.icon-btn:hover { background: #eef6ee; border-color: var(--line); color: var(--green); }
+.icon-btn.danger:hover { background: #fde8e8; border-color: #e6a2a2; color: #b91c1c; }
+.icon-btn:disabled { opacity: .45; cursor: default; background: none; border-color: transparent; }
+
 .files-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
-.files-table th, .files-table td { border: 1px solid var(--line); padding: 6px 8px; text-align: left; }
-.files-table th { background: #eef6ee; color: var(--green); font-weight: 600; }
+.files-table th, .files-table td { border: 0; border-bottom: 1px solid var(--line); padding: 8px; text-align: left; }
+.files-table th { color: var(--muted); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; padding-top: 0; }
+.files-table tbody tr:last-child td { border-bottom: 0; }
+.files-table tbody tr:hover { background: #fafbfa; }
 .files-table td.fn { font-family: ui-monospace, Menlo, monospace; font-size: 11.5px; }
 .files-table td.up { text-transform: uppercase; font-size: 11px; color: var(--muted); }
+.files-table td.dl { width: 34px; padding: 4px 8px; }
 .storage-note { color: var(--muted); font-size: 11px; margin-top: 4px; }
 .storage-note code { background: #eef0ee; padding: 2px 6px; border-radius: 4px; font-size: 10.5px; word-break: break-all; }
 
@@ -699,6 +716,7 @@ button.ghost.danger:hover { background: #fde8e8; }
 .ocr-table .c-un { width: 60px; }
 .ocr-table .c-rt { width: 82px; }
 .ocr-table .c-pg { width: 32px; text-align: center; color: var(--muted); }
+.ocr-table .c-sn { width: 40px; text-align: center; color: var(--muted); }
 .ocr-table .c-rm { width: 26px; }
 .ocr-cands { margin-top: 3px; font-size: 11px; }
 .ocr-badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; white-space: nowrap; }
@@ -711,6 +729,22 @@ button.ghost.danger:hover { background: #fde8e8; }
 .ocr-review-actions .spacer { flex: 1; }
 .ocr-lightbox { position: absolute; inset: 0; background: rgba(0,0,0,.8); display: flex; align-items: center; justify-content: center; padding: 20px; cursor: zoom-out; z-index: 10; }
 .ocr-lightbox img { max-width: 100%; max-height: 100%; box-shadow: 0 10px 40px rgba(0,0,0,.5); border-radius: 4px; background: #fff; }
+
+/* ---- Save-as dialog (shown before any export is written to disk) ---- */
+.saveas-scrim { position: fixed; inset: 0; background: rgba(0,0,0,.4); display: flex; align-items: center; justify-content: center; z-index: 50; }
+.saveas-box { background: var(--card); border-radius: 10px; padding: 18px; width: min(420px, 90vw); box-shadow: 0 10px 40px rgba(0,0,0,.3); }
+.saveas-title { font-weight: 700; font-size: 14px; margin-bottom: 10px; }
+.saveas-box input { width: 100%; border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-size: 13px; font-family: inherit; }
+.saveas-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+
+/* ---- JSON import modal (paste screen) ---- */
+.jsonimp-prompt-toggle { font-size: 12px; text-decoration: none; }
+.jsonimp-prompt-box { display: flex; flex-direction: column; gap: 8px; background: #f6f7f6; border: 1px solid var(--line); border-radius: 8px; padding: 10px; }
+.jsonimp-prompt-box textarea { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.4; border: 1px solid var(--line); border-radius: 6px; padding: 8px; background: #fff; resize: vertical; }
+.jsonimp-prompt-actions { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.jsonimp-textarea-field textarea { width: 100%; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.4; border: 1px solid var(--line); border-radius: 6px; padding: 8px; resize: vertical; }
+.jsonimp-warnings { margin: 4px 0 0; padding-left: 18px; }
+.jsonimp-warnings li { margin: 2px 0; }
 
 @media (max-width: 720px) {
   .ocr-options { margin-left: 0; width: 100%; }

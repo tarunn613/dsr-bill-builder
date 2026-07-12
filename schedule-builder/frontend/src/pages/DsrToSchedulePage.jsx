@@ -4,7 +4,9 @@ import DsrItemsSection, { newDsrItem } from '../components/DsrItemsSection.jsx';
 import MarketItemsSection, { newMarketItem } from '../components/MarketItemsSection.jsx';
 import SchedulePreview from '../components/SchedulePreview.jsx';
 import OcrImportModal from '../components/OcrImportModal.jsx';
-import { computeSchedule, downloadSchedule, getMeta } from '../api.js';
+import JsonImportModal from '../components/JsonImportModal.jsx';
+import SaveAsDialog from '../components/SaveAsDialog.jsx';
+import { computeSchedule, downloadSchedule, saveBlob, archiveExport, getMeta } from '../api.js';
 import { sendScheduleToBill } from '../store.js';
 import { useSession } from '../SessionContext.jsx';
 
@@ -37,6 +39,8 @@ export default function DsrToSchedulePage() {
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [ocrOpen, setOcrOpen] = useState(false);
+  const [jsonImportOpen, setJsonImportOpen] = useState(false);
+  const [pendingSave, setPendingSave] = useState(null); // { blob, defaultName }
   const timer = useRef(null);
 
   // ---- autosave this page's state into the active session (debounced) ----
@@ -81,9 +85,10 @@ export default function DsrToSchedulePage() {
     setMarketItems(Array.from({ length: Math.max(0, parseInt(nMkt, 10) || 0) }, newMarketItem));
   }
 
-  // Merge OCR-imported rows into the schedule (dropping any blank template rows),
-  // and adopt the factor / cost index if they were read off the sheet.
-  function handleOcrApply({ dsrItems: incomingDsr = [], marketItems: incomingMkt = [], meta: sheet = {} }) {
+  // Merge imported rows (from OCR or pasted JSON) into the schedule (dropping
+  // any blank template rows), and adopt the factor / cost index if the source
+  // provided them.
+  function handleImportApply({ dsrItems: incomingDsr = [], marketItems: incomingMkt = [], meta: sheet = {} }) {
     if (incomingDsr.length) setDsrItems((prev) => [...prev.filter(hasContent), ...incomingDsr]);
     if (incomingMkt.length) setMarketItems((prev) => [...prev.filter(hasContent), ...incomingMkt]);
     if (sheet.factor) setFactor(String(sheet.factor));
@@ -94,8 +99,8 @@ export default function DsrToSchedulePage() {
   async function doExport(kind) {
     setBusy(kind); setError('');
     try {
-      await downloadSchedule(kind, { ...payload, sessionId: activeId });
-      await reloadActive(); // refresh the session's archived-files list
+      const { blob, defaultName } = await downloadSchedule(kind, payload);
+      setPendingSave({ blob, defaultName, kind });
     } catch { setError(`Export failed (${kind}). Is the backend running?`); }
     finally { setBusy(''); }
   }
@@ -128,13 +133,27 @@ export default function DsrToSchedulePage() {
         </div>
         <div className="topbar-actions">
           <button className="ghost" onClick={() => setOcrOpen(true)} title="scan a printed/scanned Schedule of Work PDF and extract its DSR items">⤓ Import from PDF</button>
+          <button className="ghost" onClick={() => setJsonImportOpen(true)} title="paste JSON extracted by a vision AI model from a Schedule of Work">{'{ }'} Import from JSON</button>
           <button className="ghost" disabled={busy} onClick={() => doExport('xlsx')}>{busy === 'xlsx' ? '…' : 'Export Excel'}</button>
           <button className="ghost" disabled={busy} onClick={() => doExport('pdf')}>{busy === 'pdf' ? '…' : 'Export PDF'}</button>
           <button className="primary" onClick={toBill} title="carry this schedule into the bill builder">Send to Bill →</button>
         </div>
       </div>
 
-      {ocrOpen && <OcrImportModal onClose={() => setOcrOpen(false)} onApply={handleOcrApply} />}
+      {ocrOpen && <OcrImportModal onClose={() => setOcrOpen(false)} onApply={handleImportApply} />}
+      {jsonImportOpen && <JsonImportModal onClose={() => setJsonImportOpen(false)} onApply={handleImportApply} />}
+      {pendingSave && (
+        <SaveAsDialog
+          defaultName={pendingSave.defaultName}
+          onConfirm={async (filename) => {
+            saveBlob(pendingSave.blob, filename);
+            setPendingSave(null);
+            await archiveExport(activeId, { page: 'schedule', kind: pendingSave.kind, filename, blob: pendingSave.blob });
+            await reloadActive(); // refresh the session's archived-files list
+          }}
+          onCancel={() => setPendingSave(null)}
+        />
+      )}
 
       {error && <div className="banner err">{error}</div>}
 
