@@ -164,6 +164,7 @@ function createWindow() {
     minHeight: 680,
     title: 'DSR Bill Builder',
     backgroundColor: '#f4f5f3',
+    icon: path.join(__dirname, 'build', 'icon.png'),
     webPreferences: { contextIsolation: true, nodeIntegration: false },
     show: false,
   });
