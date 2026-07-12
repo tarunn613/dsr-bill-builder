@@ -1,6 +1,5 @@
 node_modules/
 frontend/dist/
-backend/data/dsr_items.json
 *.log
 .DS_Store
 desktop-dist/
