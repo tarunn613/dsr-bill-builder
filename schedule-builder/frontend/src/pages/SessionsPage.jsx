@@ -64,6 +64,13 @@ export default function SessionsPage() {
     finally { setBusy(''); e.target.value = ''; }
   }
 
+  // "Other tenders" is everything except whichever session is active; when
+  // nothing is active this is naturally just the full list.
+  const others = sessions.filter((s) => s.id !== activeId);
+  // the active session's list-summary row (counts), separate from the full
+  // `session` detail object (which carries exports/imports as arrays, not counts).
+  const activeSummary = sessions.find((s) => s.id === activeId);
+
   return (
     <div className="page">
       <div className="actionbar">
@@ -83,13 +90,8 @@ export default function SessionsPage() {
       {err && <div className="banner err">{err}</div>}
 
       <main className="sessions-main">
-        <section className="card">
-          <div className="card-head">
-            <h2>Your tenders</h2>
-            <span className="hint">Everything you do is saved automatically into the active tender.</span>
-          </div>
-
-          {creating && (
+        {creating && (
+          <div className="card new-session-card">
             <div className="new-session-row">
               <input
                 autoFocus placeholder="Name this tender (e.g. Tubewell RA Bill, Ward-5 Road)"
@@ -99,18 +101,23 @@ export default function SessionsPage() {
               <button className="primary" onClick={doCreate} disabled={busy === 'create' || !newName.trim()}>Create</button>
               <button className="ghost" onClick={() => setCreating(false)}>Cancel</button>
             </div>
-          )}
+          </div>
+        )}
 
-          {sessions.length === 0 && !creating && (
-            <p className="empty">No sessions yet. Click <b>+ New session</b> to start a tender.</p>
-          )}
-
-          <div className="session-list">
-            {sessions.map((s) => {
-              const isActive = s.id === activeId;
-              return (
-                <div key={s.id} className={'session-row' + (isActive ? ' active' : '')}>
-                  <div className="sr-main">
+        <div className="sessions-grid">
+          {/* ---- left: every tender that isn't the active one ---- */}
+          <section className="sessions-col-side">
+            <h2 className="section-h">Other tenders</h2>
+            {others.length === 0 ? (
+              <p className="empty sm">
+                {sessions.length === 0
+                  ? <>No sessions yet. Click <b>+ New session</b> above to start a tender.</>
+                  : 'No other tenders — everything you have is the active one.'}
+              </p>
+            ) : (
+              <div className="tender-cards">
+                {others.map((s) => (
+                  <article key={s.id} className="tender-card">
                     {renaming === s.id ? (
                       <div className="rename-row">
                         <input
@@ -122,87 +129,127 @@ export default function SessionsPage() {
                       </div>
                     ) : (
                       <>
-                        <div className="sr-title">
-                          {isActive && <span className="badge">Active</span>}
-                          <b>{s.name}</b>
-                        </div>
-                        <div className="sr-meta">
-                          {fmtDate(s.updatedAt)} · {s.scheduleItems} schedule · {s.billItems} bill · {s.exports} export{s.exports === 1 ? '' : 's'}
+                        <h3 className="tc-title">{s.name}</h3>
+                        <p className="tc-meta">
+                          Saved {fmtDate(s.updatedAt)}<br />
+                          {s.scheduleItems} schedule · {s.billItems} bill · {s.exports} export{s.exports === 1 ? '' : 's'}
+                        </p>
+                        <div className="tc-actions">
+                          <button className="primary sm" onClick={() => setActive(s.id)}>Open</button>
+                          <div className="sr-manage">
+                            <button className="icon-btn" title="Rename" onClick={() => { setRenaming(s.id); setRenameVal(s.name); }}>✎</button>
+                            <button className="icon-btn" title="Save as a .dbill file" onClick={() => browserDownload(sessionPackageUrl(s.id))}>⬇</button>
+                            <button className="icon-btn danger" title="Delete tender" onClick={() => doDelete(s)} disabled={busy === 'del' + s.id}>🗑</button>
+                          </div>
                         </div>
                       </>
                     )}
-                  </div>
-                  {renaming !== s.id && (
-                    <div className="sr-actions">
-                      {isActive ? (
-                        <div className="sr-nav">
-                          <a className="btnlink sm" href="#/schedule">Schedule</a>
-                          <a className="btnlink sm" href="#/bill">Bill</a>
-                        </div>
-                      ) : (
-                        <button className="primary sm" onClick={() => setActive(s.id)}>Open</button>
-                      )}
-                      <div className="sr-manage">
-                        <button className="icon-btn" title="Rename" onClick={() => { setRenaming(s.id); setRenameVal(s.name); }}>✎</button>
-                        <button className="icon-btn" title="Save as a .dbill file" onClick={() => browserDownload(sessionPackageUrl(s.id))}>⬇</button>
-                        <button className="icon-btn danger" title="Delete tender" onClick={() => doDelete(s)} disabled={busy === 'del' + s.id}>🗑</button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </section>
-
-        {session && (
-          <section className="card">
-            <div className="card-head">
-              <h2>Files in “{session.name}”</h2>
-              <span className="hint">Archived copies of everything exported or imported in this tender.</span>
-            </div>
-
-            <h3 className="sub">Exported files ({(session.exports || []).length})</h3>
-            {(session.exports || []).length === 0 ? (
-              <p className="empty sm">No exports yet. Export a Schedule or Bill and a copy is kept here.</p>
-            ) : (
-              <table className="files-table">
-                <thead><tr><th>File</th><th>From</th><th>Type</th><th>Size</th><th>When</th><th></th></tr></thead>
-                <tbody>
-                  {session.exports.map((e) => (
-                    <tr key={e.id}>
-                      <td className="fn">{e.filename}</td>
-                      <td>{e.page === 'bill' ? 'Bill' : 'Schedule'}</td>
-                      <td className="up">{e.kind}</td>
-                      <td>{fmtBytes(e.bytes)}</td>
-                      <td>{fmtDate(e.at)}</td>
-                      <td className="dl"><button className="icon-btn" title="Download" onClick={() => browserDownload(sessionExportUrl(session.id, e.id))}>⬇</button></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-
-            <h3 className="sub">Imported files ({(session.imports || []).length})</h3>
-            {(session.imports || []).length === 0 ? (
-              <p className="empty sm">No imports. Uploading a schedule to the Bill page keeps a copy here.</p>
-            ) : (
-              <table className="files-table">
-                <thead><tr><th>File</th><th>Rows</th><th>Size</th><th>When</th></tr></thead>
-                <tbody>
-                  {session.imports.map((im) => (
-                    <tr key={im.id}>
-                      <td className="fn">{im.filename}</td>
-                      <td>{im.rows}</td>
-                      <td>{fmtBytes(im.bytes)}</td>
-                      <td>{fmtDate(im.at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </article>
+                ))}
+              </div>
             )}
           </section>
-        )}
+
+          {/* ---- right: the active tender, plus its files ---- */}
+          <div className="sessions-col-main">
+            <section>
+              <h2 className="section-h">Current active tender</h2>
+              {session ? (
+                <article className="active-hero">
+                  <div className="active-hero-bar" />
+                  {renaming === session.id ? (
+                    <div className="rename-row">
+                      <input
+                        autoFocus value={renameVal} onChange={(e) => setRenameVal(e.target.value)}
+                        onKeyDown={(e) => { if (e.key === 'Enter') doRename(session.id); if (e.key === 'Escape') setRenaming(null); }}
+                      />
+                      <button className="secondary sm" onClick={() => doRename(session.id)}>Save</button>
+                      <button className="ghost sm" onClick={() => setRenaming(null)}>Cancel</button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="active-hero-top">
+                        <div className="active-hero-head">
+                          <span className="active-hero-eyebrow">Active session</span>
+                          <h3 className="active-hero-title">{session.name}</h3>
+                        </div>
+                        <div className="active-hero-manage">
+                          <button className="ghost sm" onClick={() => { setRenaming(session.id); setRenameVal(session.name); }}>✎ Rename</button>
+                          <button className="ghost danger sm" onClick={() => doDelete(session)} disabled={busy === 'del' + session.id}>🗑 Delete</button>
+                        </div>
+                      </div>
+                      <p className="active-hero-meta">
+                        Saved {fmtDate(activeSummary?.updatedAt)} · {activeSummary?.scheduleItems ?? 0} schedule
+                        {' '}· {activeSummary?.billItems ?? 0} bill · {activeSummary?.exports ?? 0} export{(activeSummary?.exports ?? 0) === 1 ? '' : 's'}
+                      </p>
+                      <div className="active-hero-actions">
+                        <a className="hero-action" href="#/schedule">View Schedule</a>
+                        <a className="hero-action" href="#/bill">View Bill</a>
+                        <button type="button" className="hero-action" onClick={() => browserDownload(sessionPackageUrl(session.id))}>⬇ Export tender</button>
+                      </div>
+                    </>
+                  )}
+                </article>
+              ) : (
+                <div className="active-hero active-hero--empty">
+                  <p className="empty">No active tender right now — open one from the list on the left, or click <b>+ New session</b> above.</p>
+                </div>
+              )}
+            </section>
+
+            {session && (
+              <>
+                <section>
+                  <h2 className="section-h">Exported files <span className="section-count">({(session.exports || []).length})</span></h2>
+                  {(session.exports || []).length === 0 ? (
+                    <div className="files-empty">No exports yet. Export a Schedule or Bill and a copy is kept here.</div>
+                  ) : (
+                    <div className="files-card">
+                      <table className="files-table">
+                        <thead><tr><th>File</th><th>From</th><th>Type</th><th>Size</th><th>When</th><th></th></tr></thead>
+                        <tbody>
+                          {session.exports.map((e) => (
+                            <tr key={e.id}>
+                              <td className="fn">{e.filename}</td>
+                              <td>{e.page === 'bill' ? 'Bill' : 'Schedule'}</td>
+                              <td className="up">{e.kind}</td>
+                              <td>{fmtBytes(e.bytes)}</td>
+                              <td>{fmtDate(e.at)}</td>
+                              <td className="dl"><button className="icon-btn" title="Download" onClick={() => browserDownload(sessionExportUrl(session.id, e.id))}>⬇</button></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
+
+                <section>
+                  <h2 className="section-h">Imported files <span className="section-count">({(session.imports || []).length})</span></h2>
+                  {(session.imports || []).length === 0 ? (
+                    <div className="files-empty">No imports. Uploading a schedule to the Bill page keeps a copy here.</div>
+                  ) : (
+                    <div className="files-card">
+                      <table className="files-table">
+                        <thead><tr><th>File</th><th>Rows</th><th>Size</th><th>When</th></tr></thead>
+                        <tbody>
+                          {session.imports.map((im) => (
+                            <tr key={im.id}>
+                              <td className="fn">{im.filename}</td>
+                              <td>{im.rows}</td>
+                              <td>{fmtBytes(im.bytes)}</td>
+                              <td>{fmtDate(im.at)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </section>
+              </>
+            )}
+          </div>
+        </div>
 
         {dir && <p className="storage-note">Sessions are stored on this computer at <code>{dir}</code></p>}
       </main>
