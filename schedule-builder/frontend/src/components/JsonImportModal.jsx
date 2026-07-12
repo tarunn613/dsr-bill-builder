@@ -11,7 +11,7 @@ import { parseJsonImport, rematchJsonRow } from '../api.js';
 //   3. review/edit every row before it's added, same as the OCR flow
 //   4. apply — rows land in the schedule in the source sheet's s_no order.
 
-export const VISION_PROMPT = `You are extracting a "Schedule of Work" / Bill of Quantities table from the attached document (PDF pages or images) into strict JSON. Output ONLY the JSON — no markdown code fences, no explanation, no text before or after it.
+export const VISION_PROMPT = `You are extracting a "Schedule of Work" / Bill of Quantities table from the attached document (PDF pages or images) into strict JSON. Output ONLY the JSON, inside a single fenced code block (\`\`\`json ... \`\`\`) so your reply shows it as a copy-able box instead of plain chat text — no explanation, no text before or after the code block.
 
 Return exactly this shape:
 
