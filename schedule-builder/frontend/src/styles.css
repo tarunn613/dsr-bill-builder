@@ -193,7 +193,7 @@ input.rate-deviates { border-color: #f59e0b; background: #fffbeb; }
 .page { display: flex; flex-direction: column; }
 .actionbar { position: sticky; top: 50px; z-index: 40; display: flex; align-items: center; gap: 20px;
   padding: 9px 18px; background: #fff; border-bottom: 1px solid var(--line); }
-.actionbar .topbar-figs { display: flex; gap: 22px; }
+.actionbar .topbar-figs { display: flex; gap: 22px; margin-left: 0; }
 .actionbar .fig span { color: var(--muted); }
 .actionbar .fig b { color: #111827; }
 .actionbar .topbar-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
