@@ -20,7 +20,6 @@ function num(v) {
   return isFinite(n) ? n : 0;
 }
 function round2(n) { return isFinite(n) ? Math.round((n + Number.EPSILON) * 100) / 100 : 0; }
-function round3(n) { return isFinite(n) ? Math.round((n + Number.EPSILON) * 1000) / 1000 : 0; }
 
 function isMain(category) {
   return !(category === 'MKT' || category === 'Recovery');
@@ -46,7 +45,9 @@ function itemMeasuredQty(rows) {
     const q = rowQty(r);
     if (q !== null) { t += q; any = true; }
   }
-  return any ? round3(t) : null;
+  // unrounded — the amount is computed from the true measured quantity (round2 on
+  // the amount, not the quantity); on-screen and Excel only *display* it at 2 dp.
+  return any ? t : null;
 }
 
 function runChain(mainAmt, mktRecAmt, factor, ciPct, quotedPct, quotedType) {
@@ -99,4 +100,4 @@ function computeBill(payload = {}) {
   };
 }
 
-export { computeBill, itemMeasuredQty, rowQty, isMain, num, round2, round3 };
+export { computeBill, itemMeasuredQty, rowQty, isMain, num, round2 };

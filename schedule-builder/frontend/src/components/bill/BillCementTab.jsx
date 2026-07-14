@@ -3,7 +3,7 @@ import { searchCementByDesc, searchCementByCode, searchCementCombined } from '..
 
 // ---- formatting helpers ----
 const n = (v) => { const x = Number(v); return isFinite(x) ? x : 0; };
-const fmtN = (v, dec = 3) =>
+const fmtN = (v, dec = 2) =>
   v === '' || v == null
     ? ''
     : Number(v).toLocaleString('en-IN', { minimumFractionDigits: dec, maximumFractionDigits: dec });
@@ -312,7 +312,7 @@ export default function BillCementTab({
 
   totalQtl = Math.round(totalQtl * 100) / 100;
   const totalBags = Math.round(totalQtl * 2);
-  const totalMT = (totalQtl / 10).toFixed(3);
+  const totalMT = (totalQtl / 10).toFixed(2);
 
   const hasAny = cementMode === 'manual'
     ? viewManual.length > 0
@@ -426,7 +426,7 @@ export default function BillCementTab({
                             type="number"
                             step="any"
                             className={`cem-qty-edit-input${v.hasQtyOverride ? ' overridden' : ''}`}
-                            value={cementQtyOverrides[v.id] !== undefined ? cementQtyOverrides[v.id] : v.baseQty || ''}
+                            value={cementQtyOverrides[v.id] !== undefined ? cementQtyOverrides[v.id] : (v.baseQty ? Number(v.baseQty).toFixed(2) : '')}
                             onChange={(e) => setCementQtyOverrides((p) => ({ ...p, [v.id]: e.target.value }))}
                             placeholder="Qty..."
                           />

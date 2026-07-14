@@ -23,7 +23,7 @@ export default function BillAbstractTab({ computed }) {
               <tr key={i} className={it.category === 'Recovery' ? 'recovery' : ''}>
                 <td className="ctr">{i + 1}</td>
                 <td>{it.description}</td>
-                <td className="rt">{qty == null ? '' : qty}</td>
+                <td className="rt">{qty == null ? '' : fmt(qty)}</td>
                 <td className="ctr">{it.unit}</td>
                 <td className="rt">{fmt(it.rate)}</td>
                 <td className="rt">{amt == null ? '' : fmt(amt)}</td>

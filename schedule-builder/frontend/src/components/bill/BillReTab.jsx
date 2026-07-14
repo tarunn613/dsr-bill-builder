@@ -1,17 +1,17 @@
 import React from 'react';
 
 const isMain = (c) => !(c === 'MKT' || c === 'Recovery');
-const round3 = (n) => Math.round((Number(n) + Number.EPSILON) * 1000) / 1000;
+const fmt2 = (n) => (n == null ? '' : Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const mul = (x) => (x === '' || x == null ? 1 : (isFinite(Number(x)) ? Number(x) : 1));
 
 function rowQty(r) {
   if (!r || r.n === '' || r.n == null || !isFinite(Number(r.n))) return null;
-  return round3(Number(r.n) * mul(r.f) * mul(r.l) * mul(r.w) * mul(r.h));
+  return Number(r.n) * mul(r.f) * mul(r.l) * mul(r.w) * mul(r.h);
 }
 function blockTotal(list) {
   let t = 0, any = false;
   for (const r of list || []) { const q = rowQty(r); if (q != null) { t += q; any = true; } }
-  return any ? round3(t) : null;
+  return any ? t : null;
 }
 const newMeasRow = () => ({ label: '', n: '', f: '', l: '', w: '', h: '' });
 
@@ -55,12 +55,12 @@ function Block({ item, itemNo, list, setList }) {
                 <td><input type="number" step="any" value={r.l} onChange={(e) => patch(j, { l: e.target.value })} /></td>
                 <td><input type="number" step="any" value={r.w} onChange={(e) => patch(j, { w: e.target.value })} /></td>
                 <td><input type="number" step="any" value={r.h} onChange={(e) => patch(j, { h: e.target.value })} /></td>
-                <td className="c-amt">{q == null ? '' : q}</td>
+                <td className="c-amt">{q == null ? '' : fmt2(q)}</td>
                 <td className="c-del"><button className="del-btn" onClick={() => del(j)}>✕</button></td>
               </tr>
             );
           })}
-          <tr className="totrow"><td colSpan={7} className="r">Total</td><td className="c-amt"><b>{total == null ? '' : total}</b></td><td></td></tr>
+          <tr className="totrow"><td colSpan={7} className="r">Total</td><td className="c-amt"><b>{total == null ? '' : fmt2(total)}</b></td><td></td></tr>
         </tbody>
       </table>
       <button className="add-btn sm" onClick={add}>+ Row</button>

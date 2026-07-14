@@ -1,6 +1,6 @@
 // Build the RA Bill workbook (Schedule + RE + Abstract) with exceljs.
 // All three sheets are cross-linked with live formulas so the workbook is dynamic:
-//   • RE quantity  = PRODUCT(Nos, factor, L, W, H) per row; item Total = SUM(rows)
+//   • RE quantity  = PRODUCT(Nos, factor, L, W, H) per row; item Total = SUM(rows) (unrounded, shown 2 dp)
 //   • Abstract qty = RE item Total  (blank until measured) → amount = qty × Schedule rate
 //   • Schedule description/rate/unit flow into RE and Abstract by reference
 // Editing an RE measurement updates the Abstract; editing the Schedule updates both.
@@ -8,7 +8,7 @@ import ExcelJS from 'exceljs';
 import { isMain, round2 } from './bill-core.js';
 
 const MONEY = '#,##,##0.00';
-const QTY = '0.000';
+const QTY = '0.00';
 const thin = { style: 'thin', color: { argb: 'FF334155' } };
 const BORDER = { top: thin, left: thin, bottom: thin, right: thin };
 const GREEN = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } };
@@ -28,18 +28,23 @@ function descHeight(text, charsPerLine) {
 
 function num(v) { const n = parseFloat(String(v ?? '').replace(/,/g, '')); return isFinite(n) ? n : ''; }
 
-function headerBlock(ws, meta, width, title) {
+// srcSheet (optional): when set, the tender-detail rows mirror that sheet via live
+// formulas instead of writing literals — so the details are typed once on the Schedule
+// sheet and reflect on RE / Abstract / Cement. The title row stays sheet-specific.
+function headerBlock(ws, meta, width, title, srcSheet) {
   const last = colLetter(width);
   const line = (r, text, opts = {}) => {
     ws.mergeCells(`A${r}:${last}${r}`);
     const c = ws.getCell(`A${r}`);
-    c.value = text;
+    c.value = (srcSheet && !opts.title)
+      ? { formula: `IF(${srcSheet}!A${r}="","",${srcSheet}!A${r})` }
+      : text;
     c.font = { bold: opts.bold || false, size: opts.size || 11 };
     c.alignment = { horizontal: opts.center ? 'center' : 'left', vertical: 'center', wrapText: true };
     if (opts.fill) c.fill = YELLOW;
   };
   const q = `${num(meta.quotedPct) || 0}% ${meta.quotedType === 'above' ? 'above' : 'below'}`;
-  line(1, title || meta.billNo || 'Running Account Bill', { bold: true, size: 13, center: true });
+  line(1, title || meta.billNo || 'Running Account Bill', { bold: true, size: 13, center: true, title: true });
   line(3, `NAME OF WORK:- ${meta.workName || ''}`, { bold: true });
   line(4, `SUB-HEAD:- ${meta.subHead || ''}`, { bold: true });
   line(5, `Agency : ${meta.agency || ''}`, { fill: true });
@@ -141,7 +146,7 @@ function buildBillWorkbook(payload = {}) {
   //   grid, MKT/Recovery are shown "at par" i.e. at their scheduled quantity) ============
   const re = wb.addWorksheet('RE', { views: [{ showGridLines: false }] });
   re.columns = [{ width: 7 }, { width: 36 }, { width: 8 }, { width: 8 }, { width: 11 }, { width: 11 }, { width: 12 }, { width: 13 }, { width: 9 }];
-  headerBlock(re, meta, 9, 'Record Entry');
+  headerBlock(re, meta, 9, 'Record Entry', 'Schedule');
 
   // signature line — deliberately borderless (not part of the table), spread across the page
   const signatureLine = (rr) => {
@@ -204,7 +209,7 @@ function buildBillWorkbook(payload = {}) {
   // ============ ABSTRACT ============
   const ab = wb.addWorksheet('Abstract', { views: [{ showGridLines: false }] });
   ab.columns = [{ width: 7 }, { width: 68 }, { width: 12 }, { width: 9 }, { width: 13 }, { width: 15 }];
-  headerBlock(ab, meta, 6, meta.billNo);
+  headerBlock(ab, meta, 6, meta.billNo, 'Schedule');
   colHeaderRow(ab, 18, ['S.No', 'DESCRIPTION', 'QTY.', 'UNIT', 'RATE', 'AMOUNT']);
   let ay = 20;
   const mainAmtCells = [], mktAmtCells = [];
@@ -278,7 +283,7 @@ function buildBillWorkbook(payload = {}) {
       { width: 14 },  // F: Coeff
       { width: 14 },  // G: Cement (Qtl)
     ];
-    headerBlock(cem, meta, 7, 'CEMENT CONSUMPTION STATEMENT');
+    headerBlock(cem, meta, 7, 'CEMENT CONSUMPTION STATEMENT', 'Schedule');
     // Source note row
     cem.mergeCells('A16:G16');
     const noteCell = cem.getCell('A16');
@@ -423,8 +428,8 @@ function buildBillWorkbook(payload = {}) {
     mtLabel.value = 'Cement in Metric Tonnes (1 MT = 10 Qtl)';
     mtLabel.font = { italic: true, size: 10 }; mtLabel.alignment = { horizontal: 'right' }; mtLabel.border = BORDER;
     const mtVal = cem.getCell(`G${mtRow}`);
-    mtVal.value = { formula: `ROUND(G${totRow}/10,3)` };
-    mtVal.numFmt = '0.000'; mtVal.font = { italic: true, size: 10 };
+    mtVal.value = { formula: `ROUND(G${totRow}/10,2)` };
+    mtVal.numFmt = '0.00'; mtVal.font = { italic: true, size: 10 };
     mtVal.alignment = { horizontal: 'right' }; mtVal.border = BORDER;
   }
 
