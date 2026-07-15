@@ -75,6 +75,9 @@ input, textarea, select {
 textarea { resize: vertical; }
 input:focus, textarea:focus, select:focus { outline: 2px solid #bcd7ff; border-color: var(--accent); }
 input[readonly], textarea[readonly] { background: #f3f4f6; color: #374151; }
+/* number spinner arrows eat into these narrow table cells and clip the digits behind them */
+input[type="number"]::-webkit-outer-spin-button, input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+input[type="number"] { -moz-appearance: textfield; }
 
 /* ---- setup ---- */
 .setup-row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
@@ -95,10 +98,10 @@ button.secondary {
 .c-sno { width: 48px; text-align: center; }
 .sno-input { text-align: center; padding-left: 2px; padding-right: 2px; }
 .c-cat { width: 66px; }
-.c-ref { width: 150px; }
-.c-qty { width: 66px; }
+.c-ref { width: 100px; }
+.c-qty { width: 92px; }
 .c-unit { width: 66px; }
-.c-rate { width: 84px; }
+.c-rate { width: 108px; }
 .c-amt { width: 92px; text-align: right; font-variant-numeric: tabular-nums; }
 .c-del { width: 26px; text-align: center; }
 .c-sno { color: var(--muted); }

@@ -236,7 +236,7 @@ function buildBillWorkbook(payload = {}) {
     for (let c = 1; c <= 6; c++) ab.getCell(qtyRow, c).border = BORDER;
     (main ? mainAmtCells : mktAmtCells).push(`F${qtyRow}`);
     abQtyRow[i] = qtyRow;
-    ay = qtyRow + 2; // one blank spacer row between items
+    ay = qtyRow + 1; // next item starts immediately, no spacer row
   }
 
   // Abstract summary (measured chain)
