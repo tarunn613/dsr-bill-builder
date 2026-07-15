@@ -84,18 +84,18 @@ function AtParBlock({ item, itemNo }) {
   );
 }
 
-export default function BillReTab({ rows, measById, setMeasById }) {
+export default function BillReTab({ rows, measById, setMeasById, snoById = {} }) {
   if (!rows.length) return <div className="empty">Add items in the Schedule tab first.</div>;
   return (
     <div>
       <div className="bar"><strong>RE — Record of Measurements</strong>
         <span className="hint">Qty = Nos × Factor × L × W × H (blanks = 1). Use a negative “Nos” for “less” deductions. MKT / Recovery items are billed at their scheduled quantity, not measured here.</span></div>
-      {rows.map((r, i) => (
+      {rows.map((r) => (
         isMain(r.category)
-          ? <Block key={r.id} item={r} itemNo={i + 1}
+          ? <Block key={r.id} item={r} itemNo={snoById[r.id]}
               list={measById[r.id]}
               setList={(list) => setMeasById({ ...measById, [r.id]: list })} />
-          : <AtParBlock key={r.id} item={r} itemNo={i + 1} />
+          : <AtParBlock key={r.id} item={r} itemNo={snoById[r.id]} />
       ))}
     </div>
   );

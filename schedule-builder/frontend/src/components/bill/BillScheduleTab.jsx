@@ -8,12 +8,13 @@ export function newBillRow() {
   return { id: crypto.randomUUID(), ref: '', description: '', unit: '', rate: '', qty: '', category: 'DSR' };
 }
 
-function Row({ index, item, patch, remove }) {
+function Row({ sno, item, patch, remove }) {
   const sign = item.category === 'Recovery' ? -1 : 1;
   const amount = round2(sign * Number(item.qty || 0) * Number(item.rate || 0));
   return (
     <tr className={item.category === 'Recovery' ? 'recovery' : ''}>
-      <td className="c-sno">{index + 1}</td>
+      {/* Canonical S.No (blank for an empty scratch row — it isn't in the bill yet) */}
+      <td className="c-sno">{sno ?? ''}</td>
       <td className="c-ref"><input value={item.ref} onChange={(e) => patch({ ref: e.target.value })} /></td>
       <td className="c-desc"><textarea rows={2} value={item.description} onChange={(e) => patch({ description: e.target.value })} /></td>
       <td className="c-qty"><input type="number" step="any" value={item.qty} onChange={(e) => patch({ qty: e.target.value })} /></td>
@@ -30,7 +31,7 @@ function Row({ index, item, patch, remove }) {
   );
 }
 
-export default function BillScheduleTab({ rows, setRows, computed }) {
+export default function BillScheduleTab({ rows, setRows, computed, snoById = {} }) {
   const patchAt = (id, ch) => setRows(rows.map((r) => (r.id === id ? { ...r, ...ch } : r)));
   const removeAt = (id) => setRows(rows.filter((r) => r.id !== id));
   const add = () => setRows([...rows, newBillRow()]);
@@ -48,8 +49,8 @@ export default function BillScheduleTab({ rows, setRows, computed }) {
           </tr>
         </thead>
         <tbody>
-          {rows.map((it, i) => (
-            <Row key={it.id} index={i} item={it} patch={(c) => patchAt(it.id, c)} remove={() => removeAt(it.id)} />
+          {rows.map((it) => (
+            <Row key={it.id} sno={snoById[it.id]} item={it} patch={(c) => patchAt(it.id, c)} remove={() => removeAt(it.id)} />
           ))}
           {rows.length === 0 && <tr><td colSpan={9} className="empty">No items — upload a schedule or send one from the DSR → Schedule page.</td></tr>}
         </tbody>

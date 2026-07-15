@@ -3,6 +3,7 @@ import BillScheduleTab, { newBillRow } from '../components/bill/BillScheduleTab.
 import BillReTab from '../components/bill/BillReTab.jsx';
 import BillAbstractTab from '../components/bill/BillAbstractTab.jsx';
 import BillCementTab from '../components/bill/BillCementTab.jsx';
+import TenderImportModal from '../components/TenderImportModal.jsx';
 import SaveAsDialog from '../components/SaveAsDialog.jsx';
 import { computeBill, downloadBill, saveBlob, archiveExport, parseScheduleFile, lookupCementCoeffs } from '../api.js';
 import { takeBillHandoff, clearBillHandoff } from '../store.js';
@@ -56,7 +57,23 @@ export default function ScheduleToBillPage() {
   const [status, setStatus] = useState('');
   const [statusKind, setStatusKind] = useState('');
   const [pendingSave, setPendingSave] = useState(null); // { blob, defaultName }
+  const [tenderImport, setTenderImport] = useState(false); // award-letter JSON import modal
   const timer = useRef(null);
+
+  // Award letter / work order JSON → header + quoted rate. Only fields the letter
+  // actually carried are overwritten; anything it didn't state (Bill No., factor,
+  // cost index, and the dates unless explicitly accepted) is left untouched.
+  function applyTenderImport({ meta: m, rates }) {
+    setMeta((prev) => {
+      const next = { ...prev };
+      for (const [k, v] of Object.entries(m || {})) if (String(v ?? '').trim() !== '') next[k] = v;
+      return next;
+    });
+    if (rates?.quotedPct != null) setQuotedPct(String(rates.quotedPct));
+    if (rates?.quotedType) setQuotedType(rates.quotedType);
+    setStatus('Bill header filled from the award letter — check it against the letter before exporting.');
+    setStatusKind('ok');
+  }
 
   // ---- autosave this page's state into the active session (debounced) ----
   const billSlice = useMemo(
@@ -89,6 +106,20 @@ export default function ScheduleToBillPage() {
       setStatusKind('ok');
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ---- canonical Schedule serial numbers ----
+  // One definition, used by every tab: an item's S.No is its 1-based position among
+  // the content-bearing rows, in schedule order. RE / Abstract / Cement all display
+  // THIS number (never their own 1..N), because the AE/JE check each line against
+  // their BOQ by serial number before signing. Blank scratch rows don't take a
+  // number — they're dropped from the bill, so numbering them would shift every
+  // item below them out of step with the exported sheets.
+  const snoById = useMemo(() => {
+    const m = {};
+    let n = 0;
+    for (const r of rows) if (hasRowContent(r)) m[r.id] = ++n;
+    return m;
+  }, [rows]);
 
   // ---- payload (clean rows + index-keyed measurements + cement overrides/mode) ----
   const payload = useMemo(() => {
@@ -220,6 +251,7 @@ export default function ScheduleToBillPage() {
           <div className="fig"><span>Gross Payable (measured)</span><b>₹ {outlay != null ? fmt(outlay) : '0'}</b></div>
         </div>
         <div className="topbar-actions">
+          <button className="ghost" onClick={() => setTenderImport(true)}>Import tender details (JSON)</button>
           <label className="ghost upload-btn">Upload schedule
             <input type="file" accept=".xlsx,.xlsm,.csv,.tsv,.txt" onChange={onUpload} hidden />
           </label>
@@ -228,6 +260,9 @@ export default function ScheduleToBillPage() {
       </div>
 
       {status && <div className={'banner ' + (statusKind === 'err' ? 'err' : statusKind === 'ok' ? 'ok' : '')}>{status}</div>}
+      {tenderImport && (
+        <TenderImportModal onApply={applyTenderImport} onClose={() => setTenderImport(false)} />
+      )}
       {pendingSave && (
         <SaveAsDialog
           defaultName={pendingSave.defaultName}
@@ -273,13 +308,14 @@ export default function ScheduleToBillPage() {
         </div>
 
         <section className="card">
-          {tab === 'schedule' && <BillScheduleTab rows={rows} setRows={setRows} computed={computed} />}
-          {tab === 're' && <BillReTab rows={rows} measById={measById} setMeasById={setMeasById} />}
+          {tab === 'schedule' && <BillScheduleTab rows={rows} setRows={setRows} computed={computed} snoById={snoById} />}
+          {tab === 're' && <BillReTab rows={rows} measById={measById} setMeasById={setMeasById} snoById={snoById} />}
           {tab === 'abstract' && <BillAbstractTab computed={computed} />}
           {tab === 'cement' && (
             <BillCementTab
               rows={rows}
               computed={computed}
+              snoById={snoById}
               cementById={cementById}
               setCementById={setCementById}
               cementMatchInfo={cementMatchInfo}

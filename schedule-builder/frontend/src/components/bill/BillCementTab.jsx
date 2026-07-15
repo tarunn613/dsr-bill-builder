@@ -36,7 +36,8 @@ function QtySourceBadge({ source }) {
   if (!source) return null;
   const cfg = {
     measured: { label: 'RE', bg: '#dbeafe', color: '#1d4ed8', title: 'Quantity from Record of Measurements (RE tab)' },
-    scheduled: { label: 'Sched', bg: '#f3f4f6', color: '#6b7280', title: 'Scheduled quantity (no RE measurements entered yet)' },
+    scheduled: { label: 'Sched', bg: '#f3f4f6', color: '#6b7280', title: 'MKT/Recovery item — billed at scheduled quantity (no RE concept for these), same as the exported bill' },
+    unmeasured: { label: 'Not measured', bg: '#fee2e2', color: '#b91c1c', title: 'No RE measurement entered yet — this row is blank in the exported bill until one is added. Enter an RE measurement, or override the quantity below.' },
     overridden: { label: 'Edit', bg: '#fef3c7', color: '#d97706', title: 'Quantity manually overridden by user' },
     manual: { label: 'Manual', bg: '#f3f4f6', color: '#6b7280', title: 'Quantity entered manually for this cement row' },
   };
@@ -172,6 +173,7 @@ function CementSearchPopover({ rowId, initialDesc, initialCode, onSelect, onClos
 export default function BillCementTab({
   rows,
   computed,
+  snoById = {},
   cementById,
   setCementById,
   cementMatchInfo,
@@ -223,19 +225,27 @@ export default function BillCementTab({
   const viewFetch = clean
     .map((r, i) => {
       const it = items[i] || {};
+      const isMainCat = !(it.category === 'MKT' || it.category === 'Recovery');
 
-      // Quantity logic with overrides
+      // Quantity logic — mirrors the exported Abstract sheet exactly: MKT/Recovery
+      // items are always billed at their scheduled quantity (Abstract pulls their
+      // qty straight from the Schedule, no RE concept for them); ordinary DSR/Appd.
+      // items use ONLY the RE-measured quantity, with NO schedule fallback — left
+      // unmeasured (blank) until an RE row exists, same as the export's own
+      // IF(RE!H="","",RE!H) formula. (Previously this silently fell back to the
+      // schedule quantity, so the on-screen total didn't match what the exported
+      // bill would actually contain.)
       let baseQty;
       let qtySource;
-      if (it.measuredQty != null) {
+      if (!isMainCat) {
+        baseQty = it.schedQty != null ? it.schedQty : n(r.qty);
+        qtySource = 'scheduled';
+      } else if (it.measuredQty != null) {
         baseQty = it.measuredQty;
         qtySource = 'measured';
-      } else if (it.schedQty != null) {
-        baseQty = it.schedQty;
-        qtySource = 'scheduled';
       } else {
-        baseQty = n(r.qty);
-        qtySource = 'scheduled';
+        baseQty = null;
+        qtySource = 'unmeasured';
       }
 
       const hasQtyOverride = cementQtyOverrides[r.id] !== undefined && cementQtyOverrides[r.id] !== '';
@@ -248,7 +258,10 @@ export default function BillCementTab({
 
       const coeff = cementById[r.id];
       const coeffNum = coeff !== undefined && coeff !== '' ? n(coeff) : null;
-      const cq = coeffNum != null && coeffNum > 0 ? Math.round(coeffNum * qty * 100) / 100 : null;
+      // qty may be null (unmeasured main item, no override) — guard it explicitly,
+      // since `coeffNum * null` coerces to 0 in JS and would wrongly show 0.00
+      // instead of a blank cell.
+      const cq = coeffNum != null && coeffNum > 0 && qty != null ? Math.round(coeffNum * qty * 100) / 100 : null;
 
       const matchInfo = cementMatchInfo?.[r.id] || null;
       const matchType = matchInfo?.matchType || (coeff !== undefined && coeff !== '' ? 'manual' : null);
@@ -260,7 +273,10 @@ export default function BillCementTab({
       if (cementMode === 'fetch' && cq != null) totalQtl += cq;
 
       return {
-        id: r.id, ref: r.ref || '', desc, originalDesc: r.description, baseQty, hasQtyOverride,
+        // sno = this item's SCHEDULE serial number, not its position in this sheet.
+        // The list is filtered to cement-consuming items, so it runs sparse
+        // (9, 10, 11, 17, 20 ...) — that is correct and matches the hand-made bill.
+        id: r.id, sno: snoById[r.id], ref: r.ref || '', desc, originalDesc: r.description, baseQty, hasQtyOverride,
         hasDescOverride, qty, qtySource, unit: it.unit || r.unit || '', coeff, coeffNum, cq, matchInfo, matchType
       };
     })
@@ -396,7 +412,7 @@ export default function BillCementTab({
                 return (
                   <React.Fragment key={v.id}>
                     <tr className={hasCoeff ? '' : 'cem-row-nocoeff'}>
-                      <td className="cem-sno">{i + 1}</td>
+                      <td className="cem-sno">{v.sno ?? ''}</td>
                       <td className="cem-ref-cell">
                         <span className="cem-code-pill">{v.ref || <em className="muted">—</em>}</span>
                       </td>
@@ -504,7 +520,8 @@ export default function BillCementTab({
                 return (
                   <React.Fragment key={r.id}>
                     <tr className="cem-extra-row">
-                      <td className="cem-sno" style={{ verticalAlign: 'middle' }}>{viewFetch.length + i + 1}</td>
+                      {/* Hand-added row: no schedule item behind it, so no schedule S.No */}
+                      <td className="cem-sno" style={{ verticalAlign: 'middle' }} title="Manually added row — not a schedule item, so it has no schedule S.No">—</td>
                       <td className="cem-ref-cell" style={{ verticalAlign: 'middle' }}>
                         <input
                           value={r.ref}
@@ -741,8 +758,10 @@ export default function BillCementTab({
           </table>
           {cementMode === 'fetch' && (
             <p className="cem-sum-note">
-              Quantities shown are a mix of <strong>scheduled/measured</strong> quantities and manual edits.
-              Items marked <QtySourceBadge source="scheduled" /> will automatically update once RE measurements are entered.
+              Quantities are <strong>RE-measured</strong> for DSR/Appd. items (same as the exported bill) and
+              <strong> scheduled</strong> for MKT/Recovery items. Rows marked <QtySourceBadge source="unmeasured" /> have
+              no RE measurement yet and show blank here and in the export — enter one in the RE tab, or override the
+              quantity below.
             </p>
           )}
         </div>

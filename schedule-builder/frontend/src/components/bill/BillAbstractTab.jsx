@@ -21,7 +21,7 @@ export default function BillAbstractTab({ computed }) {
             const amt = main ? it.measAmt : it.schedAmt;
             return (
               <tr key={i} className={it.category === 'Recovery' ? 'recovery' : ''}>
-                <td className="ctr">{i + 1}</td>
+                <td className="ctr">{it.sno ?? i + 1}</td>
                 <td>{it.description}</td>
                 <td className="rt">{qty == null ? '' : fmt(qty)}</td>
                 <td className="ctr">{it.unit}</td>

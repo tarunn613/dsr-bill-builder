@@ -15,6 +15,7 @@ import { coeffsFor, searchByDesc, searchByCode, searchCombined } from './cement.
 import { parseDocument, matchCode, visionExtract, visionConfigured } from './ocr.js';
 import { recognizePage, engineStatus } from './ocr-engines.js';
 import { parseJsonImport, matchJsonRow } from './json-import.js';
+import { parseTenderImport } from './tender-import.js';
 import {
   listSessions, createSession, getSession, updateSession, deleteSession,
   archiveExport, getExportFile, recordImport, packageSession, importSessionPackage,
@@ -114,6 +115,17 @@ app.post('/api/ocr/vision', async (req, res) => {
 app.post('/api/json-import/parse', (req, res) => {
   try {
     res.json(parseJsonImport((req.body && req.body.text) || ''));
+  } catch (e) {
+    res.status(400).json({ error: String(e.message || e) });
+  }
+});
+
+// Tender details (award letter / work order) → Bill Header. Same paste-the-JSON
+// flow as /api/json-import/parse, but the payload describes the letter rather
+// than a Schedule of Work (see tender-import.js).
+app.post('/api/tender-import/parse', (req, res) => {
+  try {
+    res.json(parseTenderImport((req.body && req.body.text) || ''));
   } catch (e) {
     res.status(400).json({ error: String(e.message || e) });
   }

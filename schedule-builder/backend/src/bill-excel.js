@@ -43,7 +43,7 @@ function headerBlock(ws, meta, width, title, srcSheet) {
     c.alignment = { horizontal: opts.center ? 'center' : 'left', vertical: 'center', wrapText: true };
     if (opts.fill) c.fill = YELLOW;
   };
-  const q = `${num(meta.quotedPct) || 0}% ${meta.quotedType === 'above' ? 'above' : 'below'}`;
+  const q = `${(num(meta.quotedPct) || 0).toFixed(2)}% ${meta.quotedType === 'above' ? 'above' : 'below'}`;
   line(1, title || meta.billNo || 'Running Account Bill', { bold: true, size: 13, center: true, title: true });
   line(3, `NAME OF WORK:- ${meta.workName || ''}`, { bold: true });
   line(4, `SUB-HEAD:- ${meta.subHead || ''}`, { bold: true });
@@ -112,9 +112,15 @@ function buildBillWorkbook(payload = {}) {
     sch.getRow(r).height = descHeight(it.description, 62);
   };
 
-  let r = 21, sno = 0;
+  // S.No is the item's position in the schedule (i + 1) — NOT a running counter over
+  // the printed rows. The sheet groups MKT/Recovery below the corrected-DSR subtotal,
+  // so a running counter would renumber them and they'd no longer match the BOQ /
+  // the app's Schedule tab. Numbering by position keeps every sheet agreeing, at the
+  // cost of a gap in the main block wherever an MKT/Recovery item sits — that gap is
+  // intentional and is what lets the AE/JE find "item 44" in both documents.
+  let r = 21;
   const mainStart = r;
-  for (const i of mainIdx) { schedRow[i] = r; writeItemRow(r, ++sno, rows[i], false); r++; }
+  for (const i of mainIdx) { schedRow[i] = r; writeItemRow(r, i + 1, rows[i], false); r++; }
   const mainEnd = r - 1;
 
   const sumLabel = (row, text, formula, bold = true) => {
@@ -133,7 +139,7 @@ function buildBillWorkbook(payload = {}) {
 
   // MKT / recovery items
   r = corrRow + 1;
-  for (const i of mktIdx) { schedRow[i] = r; writeItemRow(r, ++sno, rows[i], rows[i].category === 'Recovery'); r++; }
+  for (const i of mktIdx) { schedRow[i] = r; writeItemRow(r, i + 1, rows[i], rows[i].category === 'Recovery'); r++; }
   const mktEnd = r - 1;
 
   const subFormula = mktIdx.length ? `ROUND(G${corrRow}+SUM(G${corrRow + 1}:G${mktEnd}),2)` : `ROUND(G${corrRow},2)`;
@@ -325,8 +331,14 @@ function buildBillWorkbook(payload = {}) {
     } else {
       for (const i of cemItems) {
         const sr = schedRow[i], aq = abQtyRow[i];
-        // A: S.No
-        const ac = cem.getCell(`A${cy}`); ac.value = ++cs; ac.border = BORDER; ac.alignment = { horizontal: 'center', vertical: 'top' };
+        // A: S.No — the item's SCHEDULE serial number, linked live from the Schedule
+        // sheet (same as RE/Abstract do). This sheet lists only cement-consuming
+        // items, so these numbers are sparse and non-contiguous BY DESIGN (9, 10, 11,
+        // 17, 20, 24 ...) — exactly like the hand-made bill. A running 1..N counter
+        // here would look tidier but would break the AE/JE's BOQ cross-check.
+        const ac = cem.getCell(`A${cy}`);
+        ac.value = { formula: `IF(Schedule!A${sr}="","",Schedule!A${sr})` };
+        ac.border = BORDER; ac.alignment = { horizontal: 'center', vertical: 'top' };
         // B: DSR Ref (from Schedule)
         const bc = cem.getCell(`B${cy}`);
         bc.value = { formula: `IF(Schedule!B${sr}="","",Schedule!B${sr})` };
@@ -368,8 +380,11 @@ function buildBillWorkbook(payload = {}) {
         cy++;
       }
       for (const mr of cementFetchExtraRows) {
-        // A: S.No
-        const ac = cem.getCell(`A${cy}`); ac.value = ++cs; ac.border = BORDER; ac.alignment = { horizontal: 'center', vertical: 'top' };
+        // A: S.No — these rows were added by hand and have no schedule item behind
+        // them, so they have no schedule serial number. Print a dash rather than a
+        // counter: any digit here would read as a BOQ number and send the AE/JE
+        // looking for a schedule item that doesn't exist.
+        const ac = cem.getCell(`A${cy}`); ac.value = '—'; ac.border = BORDER; ac.alignment = { horizontal: 'center', vertical: 'top' };
         // B: DSR Ref
         const bc = cem.getCell(`B${cy}`); bc.value = mr.ref || ''; bc.border = BORDER; bc.alignment = { horizontal: 'left', vertical: 'top' }; bc.font = { bold: true, color: { argb: 'FF1f4e23' } };
         // C: Description

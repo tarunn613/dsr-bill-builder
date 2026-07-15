@@ -206,6 +206,16 @@ export async function parseJsonImport(text) {
   return data;
 }
 
+// Award letter / work order JSON → Bill Header fields (Schedule → Bill page).
+export async function parseTenderImport(text) {
+  const res = await fetch('/api/tender-import/parse', {
+    method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ text }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'could not parse that JSON');
+  return data;
+}
+
 export async function rematchJsonRow(code, description) {
   try {
     const res = await fetch('/api/json-import/match', {

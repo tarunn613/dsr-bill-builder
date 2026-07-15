@@ -77,6 +77,12 @@ function computeBill(payload = {}) {
     const measAmt = measuredQty === null ? null : round2(measuredQty * rate);
     const sign = category === 'Recovery' ? -1 : 1;
     return {
+      // sno = the canonical Schedule serial number: the item's 1-based position in
+      // the schedule. It is the SAME number on every sheet (Schedule / RE / Abstract
+      // / Cement), because the AE/JE cross-check each line against their BOQ by this
+      // number before signing. Never renumber per-sheet — `rows` here is already the
+      // content-bearing schedule in schedule order, so position == serial number.
+      sno: i + 1,
       index: i, category, ref: it.ref || '', description: it.description || '',
       unit: it.unit || '', rate, schedQty, measuredQty,
       schedAmt: sign * schedAmt, measAmt: measAmt === null ? null : sign * measAmt,
