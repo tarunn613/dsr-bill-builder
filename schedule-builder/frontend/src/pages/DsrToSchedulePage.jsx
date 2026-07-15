@@ -63,11 +63,11 @@ export default function DsrToSchedulePage() {
     factor: factor === '' ? 1 : Number(factor),
     costIndexPct: costIndexPct === '' ? 0 : Number(costIndexPct),
     dsrItems: dsrItems.filter(hasContent).map((r) => ({
-      category: r.category, ref: r.ref, code: r.code, description: r.description,
+      sno: r.sno, category: r.category, ref: r.ref, code: r.code, description: r.description,
       unit: r.unit, rate: r.rate, qty: r.qty, override: r.override, bookRate: r.bookRate,
     })),
     marketItems: marketItems.filter(hasContent).map((r) => ({
-      ref: r.ref, description: r.description, unit: r.unit, rate: r.rate, qty: r.qty,
+      sno: r.sno, ref: r.ref, description: r.description, unit: r.unit, rate: r.rate, qty: r.qty,
     })),
   }), [header, factor, costIndexPct, dsrItems, marketItems]);
 
@@ -81,8 +81,10 @@ export default function DsrToSchedulePage() {
   }, [payload]);
 
   function applySetup() {
-    setDsrItems(Array.from({ length: Math.max(0, parseInt(nDsr, 10) || 0) }, newDsrItem));
-    setMarketItems(Array.from({ length: Math.max(0, parseInt(nMkt, 10) || 0) }, newMarketItem));
+    const nD = Math.max(0, parseInt(nDsr, 10) || 0);
+    const nM = Math.max(0, parseInt(nMkt, 10) || 0);
+    setDsrItems(Array.from({ length: nD }, (_, i) => ({ ...newDsrItem(), sno: String(i + 1) })));
+    setMarketItems(Array.from({ length: nM }, (_, i) => ({ ...newMarketItem(), sno: String(nD + i + 1) })));
   }
 
   // Merge imported rows (from OCR or pasted JSON) into the schedule (dropping
@@ -110,8 +112,8 @@ export default function DsrToSchedulePage() {
       setError('Add some items before sending to the bill.'); return;
     }
     const rows = [
-      ...computed.dsrRows.map((r) => ({ ref: r.ref, description: r.description, unit: r.unit, rate: r.rate, qty: r.qty, category: r.category || 'DSR' })),
-      ...computed.marketRows.map((r) => ({ ref: r.ref || 'MKT', description: r.description, unit: r.unit, rate: r.rate, qty: r.qty, category: 'MKT' })),
+      ...computed.dsrRows.map((r) => ({ sno: r.sno, ref: r.ref, description: r.description, unit: r.unit, rate: r.rate, qty: r.qty, category: r.category || 'DSR' })),
+      ...computed.marketRows.map((r) => ({ sno: r.sno, ref: r.ref || 'MKT', description: r.description, unit: r.unit, rate: r.rate, qty: r.qty, category: 'MKT' })),
     ];
     sendScheduleToBill({
       rows,

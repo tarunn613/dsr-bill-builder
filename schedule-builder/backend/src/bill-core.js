@@ -25,6 +25,19 @@ function isMain(category) {
   return !(category === 'MKT' || category === 'Recovery');
 }
 
+// The canonical Schedule serial number for row `it` at position `i`. Trusts an
+// explicit incoming sno (carried in from the Schedule page / a JSON import / an
+// uploaded workbook's own S.No column) verbatim — never re-sorted or renumbered,
+// because the AE/JE cross-check each bill line against their BOQ by this number
+// before signing. Only falls back to the item's 1-based position when a row
+// genuinely has none (rows added by hand directly on the Bill page, or sessions
+// saved before this field existed) — shared by computeBill() and the Excel export
+// so both always agree.
+function effectiveSno(it, i) {
+  const s = it && it.sno != null ? String(it.sno).trim() : '';
+  return s !== '' ? s : String(i + 1);
+}
+
 // quantity of one measurement row = product of non-blank factors (Excel PRODUCT semantics)
 function rowQty(r) {
   if (!r || r.n === '' || r.n === null || r.n === undefined) return null;
@@ -77,12 +90,10 @@ function computeBill(payload = {}) {
     const measAmt = measuredQty === null ? null : round2(measuredQty * rate);
     const sign = category === 'Recovery' ? -1 : 1;
     return {
-      // sno = the canonical Schedule serial number: the item's 1-based position in
-      // the schedule. It is the SAME number on every sheet (Schedule / RE / Abstract
-      // / Cement), because the AE/JE cross-check each line against their BOQ by this
-      // number before signing. Never renumber per-sheet — `rows` here is already the
-      // content-bearing schedule in schedule order, so position == serial number.
-      sno: i + 1,
+      // sno = the canonical Schedule serial number — see effectiveSno() above. It is
+      // the SAME number on every sheet (Schedule / RE / Abstract / Cement); never
+      // renumber per-sheet.
+      sno: effectiveSno(it, i),
       index: i, category, ref: it.ref || '', description: it.description || '',
       unit: it.unit || '', rate, schedQty, measuredQty,
       schedAmt: sign * schedAmt, measAmt: measAmt === null ? null : sign * measAmt,
@@ -106,4 +117,4 @@ function computeBill(payload = {}) {
   };
 }
 
-export { computeBill, itemMeasuredQty, rowQty, isMain, num, round2 };
+export { computeBill, itemMeasuredQty, rowQty, isMain, num, round2, effectiveSno };

@@ -5,7 +5,7 @@
 //   • Schedule description/rate/unit flow into RE and Abstract by reference
 // Editing an RE measurement updates the Abstract; editing the Schedule updates both.
 import ExcelJS from 'exceljs';
-import { isMain, round2 } from './bill-core.js';
+import { isMain, round2, effectiveSno } from './bill-core.js';
 
 const MONEY = '#,##,##0.00';
 const QTY = '0.00';
@@ -112,15 +112,17 @@ function buildBillWorkbook(payload = {}) {
     sch.getRow(r).height = descHeight(it.description, 62);
   };
 
-  // S.No is the item's position in the schedule (i + 1) — NOT a running counter over
-  // the printed rows. The sheet groups MKT/Recovery below the corrected-DSR subtotal,
-  // so a running counter would renumber them and they'd no longer match the BOQ /
-  // the app's Schedule tab. Numbering by position keeps every sheet agreeing, at the
-  // cost of a gap in the main block wherever an MKT/Recovery item sits — that gap is
-  // intentional and is what lets the AE/JE find "item 44" in both documents.
+  // S.No is effectiveSno() (see bill-core.js) — the row's own explicit serial number
+  // if it has one (from a JSON/OCR import or an uploaded schedule's S.No column),
+  // else its position in the schedule (i + 1) as a fallback — NOT a running counter
+  // over the printed rows. The sheet groups MKT/Recovery below the corrected-DSR
+  // subtotal, so a running counter would renumber them and they'd no longer match
+  // the BOQ / the app's Schedule tab. Either way this can leave a gap in the main
+  // block wherever an MKT/Recovery item sits — that gap is intentional and is what
+  // lets the AE/JE find "item 44" in both documents.
   let r = 21;
   const mainStart = r;
-  for (const i of mainIdx) { schedRow[i] = r; writeItemRow(r, i + 1, rows[i], false); r++; }
+  for (const i of mainIdx) { schedRow[i] = r; writeItemRow(r, effectiveSno(rows[i], i), rows[i], false); r++; }
   const mainEnd = r - 1;
 
   const sumLabel = (row, text, formula, bold = true) => {
@@ -139,7 +141,7 @@ function buildBillWorkbook(payload = {}) {
 
   // MKT / recovery items
   r = corrRow + 1;
-  for (const i of mktIdx) { schedRow[i] = r; writeItemRow(r, i + 1, rows[i], rows[i].category === 'Recovery'); r++; }
+  for (const i of mktIdx) { schedRow[i] = r; writeItemRow(r, effectiveSno(rows[i], i), rows[i], rows[i].category === 'Recovery'); r++; }
   const mktEnd = r - 1;
 
   const subFormula = mktIdx.length ? `ROUND(G${corrRow}+SUM(G${corrRow + 1}:G${mktEnd}),2)` : `ROUND(G${corrRow},2)`;

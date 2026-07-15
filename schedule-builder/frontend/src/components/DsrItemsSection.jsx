@@ -11,7 +11,7 @@ const leadLabel = (k) => k
 
 export function newDsrItem() {
   return {
-    id: crypto.randomUUID(), category: 'DSR', ref: '', code: '', description: '',
+    id: crypto.randomUUID(), sno: '', category: 'DSR', ref: '', code: '', description: '',
     unit: '', rate: '', qty: '', carriage: false, rateOptions: null, lead: '',
     bookRate: '', override: false,
   };
@@ -41,7 +41,14 @@ function DsrRow({ index, item, patch, remove }) {
 
   return (
     <tr>
-      <td className="c-sno">{index + 1}</td>
+      {/* S.No is editable and defaults to position — imports (JSON/OCR) fill in the
+          schedule's own serial number here, which must be shown verbatim (never
+          re-sorted or renumbered) since AE/JE sign off by cross-checking this number
+          against their BOQ. */}
+      <td className="c-sno">
+        <input className="sno-input" value={item.sno || String(index + 1)}
+          onChange={(e) => patch({ sno: e.target.value })} />
+      </td>
       <td className="c-cat">
         <select value={item.category} onChange={(e) => patch({ category: e.target.value })}>
           <option value="DSR">DSR</option>
@@ -103,7 +110,7 @@ function DsrRow({ index, item, patch, remove }) {
 export default function DsrItemsSection({ items, setItems }) {
   const patchAt = (id, changes) => setItems(items.map((it) => (it.id === id ? { ...it, ...changes } : it)));
   const removeAt = (id) => setItems(items.filter((it) => it.id !== id));
-  const add = () => setItems([...items, newDsrItem()]);
+  const add = () => setItems([...items, { ...newDsrItem(), sno: String(items.length + 1) }]);
 
   return (
     <section className="card">

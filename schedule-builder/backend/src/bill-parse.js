@@ -70,7 +70,9 @@ function matrixToRows(m) {
     if (/^(total|subtotal|grand total|say|multiplying|applying|add @|add cost|corrected|work outlay|less @)/i.test(desc || snoR)) continue;
     if (!desc || qty == null || rate == null) continue;
     rows.push({
-      sno: num(snoR) ?? rows.length + 1, ref, description: desc, unit: norm(rr[cols.unit]),
+      // Keep the sheet's own S.No cell verbatim (a string) — it may be a merged
+      // ("16 17") or lettered ("5A") value that num() would otherwise mangle.
+      sno: snoR || String(rows.length + 1), ref, description: desc, unit: norm(rr[cols.unit]),
       qty, rate, category: categoryFrom(ref, cols.cat >= 0 ? rr[cols.cat] : ''),
     });
   }

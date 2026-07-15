@@ -66,7 +66,13 @@ function computeSchedule(payload = {}) {
   const factor = payload.factor === undefined || payload.factor === '' ? 1 : num(payload.factor);
   const costIndexPct = num(payload.costIndexPct);
 
-  let sno = 0;
+  // S.No: trust an explicit incoming value (typed by the user, or carried in from a
+  // JSON/OCR import) verbatim — it's the schedule's own serial number and must never
+  // be re-sorted or renumbered here. Only fall back to a running position counter
+  // when a row genuinely has none (e.g. old saved sessions from before this field
+  // existed). The counter is shared across dsrItems then marketItems so the fallback
+  // matches today's on-screen ordering (DSR block first, market items after).
+  let counter = 0;
   const mapRow = (r, forcedCategory) => {
     const qty = num(r.qty);
     const rate = num(r.rate);
@@ -76,8 +82,11 @@ function computeSchedule(payload = {}) {
     const override = !!r.override;
     // a real deviation only when the user overrode AND the value differs from the DSR book rate
     const deviates = override && bookRate != null && round2(bookRate) !== rate;
+    counter++;
+    const sno = (r.sno !== undefined && r.sno !== null && String(r.sno).trim() !== '')
+      ? String(r.sno).trim() : String(counter);
     return {
-      sno: ++sno,
+      sno,
       category: forcedCategory || r.category || 'DSR',
       ref: r.ref || r.code || '',
       code: r.code || r.ref || '',

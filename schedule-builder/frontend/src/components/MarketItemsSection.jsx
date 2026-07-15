@@ -4,14 +4,19 @@ const round2 = (n) => Math.round((Number(n || 0) + Number.EPSILON) * 100) / 100;
 const fmt = (r) => (r === '' || r == null ? '' : Number(r).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 
 export function newMarketItem() {
-  return { id: crypto.randomUUID(), ref: 'MKT', description: '', unit: '', rate: '', qty: '' };
+  return { id: crypto.randomUUID(), sno: '', ref: 'MKT', description: '', unit: '', rate: '', qty: '' };
 }
 
 function MarketRow({ index, startSno, item, patch, remove }) {
   const amount = round2(Number(item.qty || 0) * Number(item.rate || 0));
   return (
     <tr>
-      <td className="c-sno">{startSno + index}</td>
+      {/* Editable, defaults to position — see DsrItemsSection for why: imports carry
+          the schedule's own serial number here and it must never be re-derived. */}
+      <td className="c-sno">
+        <input className="sno-input" value={item.sno || String(startSno + index)}
+          onChange={(e) => patch({ sno: e.target.value })} />
+      </td>
       <td className="c-ref">
         <input value={item.ref} onChange={(e) => patch({ ref: e.target.value })} />
       </td>
@@ -39,7 +44,7 @@ function MarketRow({ index, startSno, item, patch, remove }) {
 export default function MarketItemsSection({ items, setItems, startSno }) {
   const patchAt = (id, changes) => setItems(items.map((it) => (it.id === id ? { ...it, ...changes } : it)));
   const removeAt = (id) => setItems(items.filter((it) => it.id !== id));
-  const add = () => setItems([...items, newMarketItem()]);
+  const add = () => setItems([...items, { ...newMarketItem(), sno: String(startSno + items.length) }]);
 
   return (
     <section className="card">

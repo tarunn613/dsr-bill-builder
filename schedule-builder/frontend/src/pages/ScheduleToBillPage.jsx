@@ -18,7 +18,7 @@ const META_FIELDS = [
   ['dateStart', 'Date of start'], ['dateCompletion', 'Date of completion'],
 ];
 const hasRowContent = (r) => ['ref', 'description', 'qty', 'rate'].some((k) => String(r[k] ?? '').trim() !== '');
-const toRow = (r) => ({ id: crypto.randomUUID(), ref: r.ref || '', description: r.description || '', unit: r.unit || '', rate: r.rate ?? '', qty: r.qty ?? '', category: r.category || 'DSR' });
+const toRow = (r) => ({ id: crypto.randomUUID(), sno: r.sno != null ? String(r.sno).trim() : '', ref: r.ref || '', description: r.description || '', unit: r.unit || '', rate: r.rate ?? '', qty: r.qty ?? '', category: r.category || 'DSR' });
 
 export default function ScheduleToBillPage() {
   // Remounted (via key on session id) when the active session changes, so state
@@ -108,16 +108,24 @@ export default function ScheduleToBillPage() {
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ---- canonical Schedule serial numbers ----
-  // One definition, used by every tab: an item's S.No is its 1-based position among
-  // the content-bearing rows, in schedule order. RE / Abstract / Cement all display
-  // THIS number (never their own 1..N), because the AE/JE check each line against
-  // their BOQ by serial number before signing. Blank scratch rows don't take a
-  // number — they're dropped from the bill, so numbering them would shift every
-  // item below them out of step with the exported sheets.
+  // One definition, used by every tab: an item's S.No is its OWN explicit serial
+  // number — carried in from the schedule builder (typed there, or from a JSON/OCR
+  // import), or from an uploaded workbook's own S.No column — shown verbatim, never
+  // re-sorted or renumbered. Only rows with no explicit number at all (added by hand
+  // directly on this page, or sessions saved before this field existed) fall back to
+  // their 1-based position among the content-bearing rows. RE / Abstract / Cement all
+  // display THIS number (never their own 1..N), because the AE/JE check each line
+  // against their BOQ by serial number before signing. Blank scratch rows don't take
+  // a number — they're dropped from the bill.
   const snoById = useMemo(() => {
     const m = {};
     let n = 0;
-    for (const r of rows) if (hasRowContent(r)) m[r.id] = ++n;
+    for (const r of rows) {
+      if (!hasRowContent(r)) continue;
+      n++;
+      const explicit = r.sno != null ? String(r.sno).trim() : '';
+      m[r.id] = explicit !== '' ? explicit : String(n);
+    }
     return m;
   }, [rows]);
 
@@ -153,7 +161,7 @@ export default function ScheduleToBillPage() {
       meta: { ...meta, quotedPct: Number(quotedPct) || 0, quotedType },
       factor: factor === '' ? 1 : Number(factor), costIndexPct: Number(costIndexPct) || 0,
       quotedPct: Number(quotedPct) || 0, quotedType,
-      rows: clean.map((r) => ({ ref: r.ref, description: r.description, unit: r.unit, rate: r.rate, qty: r.qty, category: r.category })),
+      rows: clean.map((r) => ({ sno: r.sno, ref: r.ref, description: r.description, unit: r.unit, rate: r.rate, qty: r.qty, category: r.category })),
       meas,
       cement,
       cementMode,

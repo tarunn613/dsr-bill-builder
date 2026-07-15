@@ -63,7 +63,7 @@ function rowToItems(rows, { useBookRate }) {
     if (!r.include) continue;
     const qty = num(r.qty);
     if (r.category === 'MKT') {
-      marketItems.push({ id: uuid(), ref: r.code || 'MKT', description: r.description || '', unit: r.unit || '', rate: num(r.rate), qty });
+      marketItems.push({ id: uuid(), sno: r.s_no || '', ref: r.code || 'MKT', description: r.description || '', unit: r.unit || '', rate: num(r.rate), qty });
       continue;
     }
     const isDsr = r.category === 'DSR';
@@ -71,6 +71,7 @@ function rowToItems(rows, { useBookRate }) {
     const bookRate = isDsr && !carriage && r.rate != null && r.rate !== '' ? num(r.rate) : '';
     dsrItems.push({
       id: uuid(),
+      sno: r.s_no || '',
       category: r.category || 'DSR',
       ref: r.code || '', code: r.code || '',
       description: r.description || '', unit: r.unit || '',

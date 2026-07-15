@@ -92,7 +92,8 @@ button.secondary {
   position: sticky; top: 0;
 }
 .items-table td input, .items-table td textarea, .items-table td select { padding: 4px 5px; }
-.c-sno { width: 34px; text-align: center; }
+.c-sno { width: 48px; text-align: center; }
+.sno-input { text-align: center; padding-left: 2px; padding-right: 2px; }
 .c-cat { width: 66px; }
 .c-ref { width: 150px; }
 .c-qty { width: 66px; }
