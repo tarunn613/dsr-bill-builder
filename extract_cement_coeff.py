@@ -15,8 +15,11 @@ Key improvements vs reference script:
   6. Tentative group/leaf classification: x<100 codes that receive a
      unit+coeff on continuation rows become leaf entries, not group headers.
      They remain groups only when followed by indented leaf sub-codes.
-  7. "100" sentinel tokens (page-number artifacts at x≈360-370) filtered
-     from descriptions.
+  7. Unit-scale prefix ("100 sqm" / "100 metre" / "10 Nos."): the integer that
+     prints immediately LEFT of the unit word means the coefficient is per-scale
+     (Qtl per 100 sqm), so the true per-unit coeff = printed / scale. The old
+     script discarded this "100" as a page artifact, causing a 100x cement
+     over-count on ~138 area/length items. Now captured and applied.
 """
 
 import fitz
@@ -72,11 +75,16 @@ KNOWN_TRUTHS = {
 COEFF_MIN = 0.0
 COEFF_MAX = 15.0
 
-# Standalone "100" tokens that appear at the unit-column boundary are section
-# markers (e.g. "100 %" footnotes, "100 unit" table headers) — not desc text.
-# Filter when: token is literally "100" and x is in unit column vicinity.
-def is_sentinel_100(x, t):
-    return t == "100" and 350 <= x < 400
+# Unit-scale prefix. DSR Vol-2 prints some units as "100 sqm" / "100 metre" /
+# "10 Nos." — an integer 10/100/1000 sitting in the unit column, immediately LEFT
+# of the unit word, on the SAME row. The coefficient there is per-scale (e.g.
+# 3.60 Qtl per 100 sqm), so the true per-unit coeff = printed / scale.
+# NOTE: mix-ratio digits such as the "10" of "1:5:10" sit deeper left (x<=355) on
+# a no-unit continuation line; the "left-of-unit, in the unit band, same row as a
+# unit word" test excludes them, so concrete stays correctly per-cum.
+INTSCALE = re.compile(r'^(?:10|100|1000|10000)$')
+UNIT_BAND_LO = 360   # x lower bound for the unit / scale column
+UNIT_BAND_HI = 470   # x upper bound (coefficients live at x >= 470)
 
 # ---------------------------------------------------------------------------
 # ROW CLUSTERING
@@ -104,25 +112,47 @@ def is_skip_row(row):
 
 def parse_row_tokens(row, skip_first):
     """
-    Classify tokens into unit / coeff / desc.
+    Classify tokens into unit / coeff / scale / desc.
     skip_first: if True, the first token is the code and should be ignored.
+
+    scale: an integer 10/100/1000 in the unit band that sits LEFT of the unit
+    word on this row (the "100" of a "100 sqm" unit). Only recognised when a
+    unit word is present on the same row, so description digits never become a
+    scale. Returned so the caller can divide the coefficient by it.
     """
     unit = None
+    unit_x = None
     coeff = None
     desc_tokens = []
+    scale_cands = []   # (x, value) integer tokens in the unit band
     for i, (x, t) in enumerate(row):
         if skip_first and i == 0:
             continue
-        if is_sentinel_100(x, t):
-            continue   # skip the "100" page-marker artifact
         tl = t.strip().lower().rstrip(".")
-        if 360 <= x < 470 and tl in UNITS:
+        if UNIT_BAND_LO <= x < UNIT_BAND_HI and tl in UNITS:
             unit = tl
-        elif x >= 470 and NUM.match(t):
+            unit_x = x
+        elif UNIT_BAND_LO <= x < UNIT_BAND_HI and INTSCALE.match(t):
+            scale_cands.append((x, int(t)))
+        elif x >= UNIT_BAND_HI and NUM.match(t):
+            # PLAIN numbers only. The coefficient column can hold TWO components,
+            # e.g. 8.11 prints "8.16 + 3.30*" = ordinary cement + WHITE cement,
+            # and 3.15 ("White cement mortar 1:2") prints a lone "6.80*". The
+            # asterisk marks a different material or a page-specific footnote
+            # qualifier, so a *-marked value must never be taken as this item's
+            # ordinary-cement coefficient. NUM rejects "3.30*" naturally; do NOT
+            # strip the marker (doing so lets white cement overwrite the real
+            # value). ~31 *-marked values are deliberately left unextracted —
+            # they need a per-page footnote-legend decision. See the guide §6.
             coeff = float(t)
-        elif x < 470:
+        elif x < UNIT_BAND_HI:
             desc_tokens.append(t)
-    return unit, coeff, desc_tokens
+    scale = None
+    if unit_x is not None:
+        left = [v for (sx, v) in scale_cands if sx < unit_x]
+        if left:
+            scale = left[-1]   # nearest integer immediately left of the unit
+    return unit, coeff, scale, desc_tokens
 
 # ---------------------------------------------------------------------------
 # EXTRACTION (single-pass across all pages, carrying state across page breaks)
@@ -156,12 +186,28 @@ def extract_all(pdf_path):
         if pending is None:
             return
         if not pending["is_group"]:
-            if (pending["coeff"] is not None
+            raw = pending["coeff"]                  # printed value (may be per-scale)
+            per = pending.get("scale") or 1         # 1 / 10 / 100
+            eff = (raw / per) if raw is not None else None
+            # Range-check the EFFECTIVE coeff, not the printed one: a per-100 row
+            # legitimately prints up to ~31.72 (19.2.5 = 31.72 per 100 metre =
+            # 0.3172/metre). Gating on the raw value silently dropped those.
+            if (raw is not None
                     and pending["unit"] is not None
                     and pending["unit"] in UNITS
-                    and COEFF_MIN < pending["coeff"] <= COEFF_MAX):
-                out_entries.append({k: pending[k] for k in
-                    ("code","leaf_desc","unit","coeff","group_desc","source_page")})
+                    and COEFF_MIN < eff <= COEFF_MAX):
+                out_entries.append({
+                    "code":         pending["code"],
+                    "leaf_desc":    pending["leaf_desc"],
+                    "unit":         pending["unit"],
+                    "coeff":        eff,            # consumers multiply qty by this
+                    "coeff_source": raw,           # verbatim printed coefficient
+                    "per":          per,           # units the printed value is per
+                    "unit_source":  (f"{per} {pending['unit']}"
+                                     if per != 1 else pending["unit"]),
+                    "group_desc":   pending["group_desc"],
+                    "source_page":  pending["source_page"],
+                })
         else:
             group_desc = pending["leaf_desc"]
         pending = None
@@ -173,7 +219,7 @@ def extract_all(pdf_path):
         is_code = bool(CODE.match(ft)) and fx < 130
 
         if is_code:
-            unit, coeff, desc_tokens = parse_row_tokens(row, skip_first=True)
+            unit, coeff, scale, desc_tokens = parse_row_tokens(row, skip_first=True)
 
             if pending is not None:
                 # A new code is starting. Finalize the pending entry.
@@ -193,6 +239,7 @@ def extract_all(pdf_path):
                 "leaf_desc":   d,
                 "unit":        unit,
                 "coeff":       coeff,
+                "scale":       scale,
                 "group_desc":  group_desc,
                 "source_page": pdf_page_no,
                 "is_group":    is_group,
@@ -201,13 +248,15 @@ def extract_all(pdf_path):
         else:
             # Continuation row
             if pending is not None:
-                unit, coeff, desc_tokens = parse_row_tokens(row, skip_first=False)
+                unit, coeff, scale, desc_tokens = parse_row_tokens(row, skip_first=False)
                 if desc_tokens:
                     pending["leaf_desc"] = (pending["leaf_desc"] + " " + " ".join(desc_tokens)).strip()
                 if unit and not pending["unit"]:
                     pending["unit"] = unit
                 if coeff is not None and pending["coeff"] is None:
                     pending["coeff"] = coeff
+                if scale and not pending.get("scale"):
+                    pending["scale"] = scale
                 # Tentative group → promote to leaf once we have unit or coeff
                 if pending["is_group"] and (pending["unit"] is not None
                                             or pending["coeff"] is not None):
@@ -338,22 +387,36 @@ def verify(codes, dsr_items_path, baseline_path=None):
     non_joiners = sorted([c for c in codes if c not in rate_by_code])
     print(f"  Non-joiners ({len(non_joiners)}): {non_joiners[:30]}{'...' if len(non_joiners)>30 else ''}")
 
-    # D. Regression vs baseline
-    print("\n=== D. Regression vs baseline ===")
+    # D. Regression vs baseline — the ONLY permitted change is the per-100/per-10
+    #    rescale (baseline stored the raw printed value; fixed data stores raw/per).
+    #    Any other coeff movement is a real regression and fails the build.
+    print("\n=== D. Regression vs baseline (scale-aware) ===")
     if baseline_path and baseline_path.exists():
         bdata = json.loads(baseline_path.read_text())
         bcodes = bdata.get("codes", {})
-        diffs = []
+        unexpected = []
+        rescaled = 0
         for code, bentry in bcodes.items():
-            if code in codes:
-                nc = codes[code]["coeff"]
-                oc = bentry.get("coeff")
-                if oc is not None and abs(nc - oc) > 1e-9:
-                    diffs.append((code, oc, nc))
-        if diffs:
-            errors.append(f"FAIL D: {len(diffs)} coeff disagreements: {diffs[:10]}")
+            if code not in codes:
+                continue
+            oc = bentry.get("coeff")
+            if oc is None:
+                continue
+            nc   = codes[code]["coeff"]
+            per  = codes[code].get("per", 1) or 1
+            nsrc = codes[code].get("coeff_source", nc)
+            if abs(nc - oc) <= 1e-9:
+                continue                                    # unchanged (per == 1)
+            if per > 1 and abs(nsrc - oc) <= 1e-9 and abs(nc - oc / per) <= 1e-12:
+                rescaled += 1                               # expected /per rescale
+                continue
+            unexpected.append((code, oc, nc, per))
+        if unexpected:
+            errors.append(f"FAIL D: {len(unexpected)} UNEXPECTED coeff changes "
+                          f"(not a clean /per rescale): {unexpected[:12]}")
         else:
-            print(f"  PASS: 0 disagreements on {len(bcodes)} baseline codes")
+            print(f"  PASS: {rescaled} codes rescaled by /per (the intended fix); "
+                  f"all other baseline coeffs byte-identical")
         gained = [c for c in codes if c not in bcodes]
         lost   = [c for c in bcodes if c not in codes]
         print(f"  Gained vs baseline: {len(gained)}: {gained[:20]}")
@@ -384,22 +447,30 @@ def write_json(codes, out_path, join_rate, join_count):
     output_codes = {}
     for code, entry in sorted(codes.items()):
         output_codes[code] = {
-            "code":        entry["code"],
-            "unit":        entry["unit"],
-            "coeff":       entry["coeff"],
-            "leaf_desc":   entry["leaf_desc"],
-            "group_desc":  entry["group_desc"],
-            "full_desc":   entry["full_desc"],
-            "description": entry["full_desc"],   # app compat alias
-            "source_page": entry["source_page"],
+            "code":         entry["code"],
+            "unit":         entry["unit"],
+            "coeff":        entry["coeff"],          # Qtl per ONE unit (use this)
+            "coeff_source": entry["coeff_source"],   # verbatim printed value
+            "per":          entry["per"],            # printed value is per this many units
+            "unit_source":  entry["unit_source"],    # e.g. "100 sqm"
+            "leaf_desc":    entry["leaf_desc"],
+            "group_desc":   entry["group_desc"],
+            "full_desc":    entry["full_desc"],
+            "description":  entry["full_desc"],      # app compat alias
+            "source_page":  entry["source_page"],
         }
+    scaled = sum(1 for e in codes.values() if e.get("per", 1) != 1)
     payload = {
         "source":        "DSR 2023 Vol 2 — Coefficients for Cement Consumption (PDF pp.306-384)",
         "count":         len(output_codes),
         "extracted":     datetime.date.today().isoformat(),
         "join_rate_pct": round(join_rate, 1),
         "join_count":    join_count,
-        "verification":  "PASSED — all §5 A-D checks",
+        "scaled_count":  scaled,
+        "coeff_note":    ("`coeff` is Qtl per ONE unit. For per-100/per-10 items "
+                          "(unit printed as '100 sqm'/'10 Nos.') coeff = coeff_source / per; "
+                          "`coeff_source` is the verbatim DSR value, `per` the divisor."),
+        "verification":  "PASSED — all §5 A-D checks + scale re-check",
         "codes":         output_codes,
     }
     out_path.write_text(json.dumps(payload, indent=1, ensure_ascii=False), encoding="utf-8")
@@ -416,22 +487,27 @@ def load_sqlite(codes, db_path):
     cur.execute("DROP TABLE IF EXISTS cement_coeff")
     cur.execute("""
         CREATE TABLE cement_coeff (
-            code        TEXT PRIMARY KEY,
-            unit        TEXT NOT NULL,
-            coeff       REAL NOT NULL,
-            leaf_desc   TEXT,
-            group_desc  TEXT,
-            full_desc   TEXT,
-            source_page INTEGER
+            code         TEXT PRIMARY KEY,
+            unit         TEXT NOT NULL,
+            coeff        REAL NOT NULL,
+            coeff_source REAL,
+            per          INTEGER,
+            unit_source  TEXT,
+            leaf_desc    TEXT,
+            group_desc   TEXT,
+            full_desc    TEXT,
+            source_page  INTEGER
         )
     """)
 
     rows = [
-        (e["code"], e["unit"], e["coeff"], e["leaf_desc"],
-         e["group_desc"], e["full_desc"], e["source_page"])
+        (e["code"], e["unit"], e["coeff"], e["coeff_source"], e["per"],
+         e["unit_source"], e["leaf_desc"], e["group_desc"], e["full_desc"],
+         e["source_page"])
         for e in sorted(codes.values(), key=lambda x: x["code"])
     ]
-    cur.executemany("INSERT INTO cement_coeff VALUES (?,?,?,?,?,?,?)", rows)
+    cur.executemany(
+        "INSERT INTO cement_coeff VALUES (?,?,?,?,?,?,?,?,?,?)", rows)
 
     cur.execute("""
         CREATE TABLE IF NOT EXISTS extraction_meta (

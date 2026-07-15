@@ -416,6 +416,135 @@ _RATE_PATTERN = re.compile(
 )
 
 
+# FIX-6 (data-integrity): recover priced items the end-anchored rate regex
+# mis-classifies as rate-less *parents* and silently drops. Two mechanisms,
+# both leave the rate NOT at the very end of the joined description text:
+#
+#   Bug A — trailing non-item text after the rate. Two flavours:
+#             * an ALL-CAPS section-divider line the two hard-coded line filters
+#               miss ("ROAD WORK", "SAND STONE FLOORING", "C.P. BRASS FITTINGS",
+#               "EXTERIOR FINISHING"), leaked when the item is the last priced
+#               row before a section break / chapter-divider page.
+#             * a "Note for item No. X:- ..." footnote paragraph (the existing
+#               'Note :-' filter only catches the colon-dash form).
+#           Examples dropped before this fix: 11.27, 13.41.1, 15.60, 18.48A, 5.31.
+#
+#   Bug B — the rate column value is extracted on its OWN line positioned
+#           *between* two wrapped description lines, so a short description tail
+#           follows the rate ("... each 12770.55 bricks of class designation
+#           7.5"). Hits ~all chapter-19 manhole ".1" sub-variants (19.7.1.1,
+#           19.9.1.1, 19.10.1, ...).
+#
+# recover_rate() runs ONLY after the raw end-anchored match has already failed,
+# so it can never change how an existing correctly-parsed item is read — it is
+# purely additive (verified by an old-vs-new DB diff after re-extraction).
+
+# Footnote paragraph marker: "Note :-", "Note:-", "Note for item No. 4.15 :-".
+# Everything from here to the next code is explanatory text, never item data.
+_NOTE_TRUNC_RE = re.compile(r'\bNote\b[^:]*:-', re.IGNORECASE)
+
+# Bug-B units are restricted to concrete PHYSICAL units so a stray "No. 5.31"
+# cross-reference (chapter.item) can never be mistaken for a "<unit> <rate>".
+_PHYS_UNITS = {'each', 'sqm', 'sq.m', 'metre', 'meter', 'cum', 'kg', 'kilogram',
+               'quintal', 'qtl', 'tonne', 'litre', 'liter', 'cudm', 'dm', 'ml',
+               'cartridge', 'mt', 'set', 'pair', 'roll', 'bundle', 'km', 'nos'}
+_EMB_RATE_RE = re.compile(
+    r'(?:(10|100|1000|10000)\s+)?([A-Za-z][A-Za-z.]*)\s+([\d,]+\.\d{2})'
+)
+
+
+# FIX-7 (data-integrity): the inline "code + rate on the same line" fast-path
+# emits an item the moment a code line ENDS in "<word> <NN.dd>", accepting ANY
+# word as the unit. On a wrapped first line that ends in a measurement (e.g.
+# "16.40 ... premixed fine aggregate ( passing 2.36") it fires on "passing 2.36"
+# and stores the sieve size 2.36 as the rate — the real rate "sqm 88.55" sits at
+# the end of the item, lines later. Gate the fast-path to KNOWN units only; an
+# unknown "unit" means this isn't really the rate, so fall through to normal
+# accumulation and let finalize_pending find the true end-of-item rate.
+# Deferring is loss-free: finalize's own end-anchored match accepts any unit, so
+# a genuine one-line item with a rare unit still comes out byte-identical.
+_KNOWN_UNITS = {'each', 'sqm', 'sq.m', 'sqmtr', 'metre', 'meter', 'mtr', 'rmt',
+                'rmtr', 'cum', 'kg', 'kilogram', 'quintal', 'qtl', 'tonne',
+                'litre', 'liter', 'cudm', 'dm', 'ml', 'cartridge', 'mt', 'set',
+                'sets', 'pair', 'roll', 'bundle', 'km', 'nos', 'no', 'day',
+                'hour', 'cm', 'm', 'gram', 'sqcm'}
+
+
+def _known_unit_word(unit_str):
+    """True if the parsed unit is a real DSR unit (multiplier prefix allowed)."""
+    u = re.sub(r'^(?:10|100|1000|10000)\s+', '', unit_str.strip())
+    return u.strip().rstrip('.').lower() in _KNOWN_UNITS
+
+
+def _is_divider_tok(tok):
+    """A token from an all-caps section-divider header (>=2 upper letters, no
+    lowercase, no digit). Excludes 'IS'/'4885'-style tokens (they carry digits)."""
+    letters = [c for c in tok if c.isalpha()]
+    return (len(letters) >= 2 and all(c.isupper() for c in letters)
+            and not any(ch.isdigit() for ch in tok))
+
+
+def _strip_trailing_dividers(text):
+    """Drop a trailing run of all-caps section-divider words from `text`."""
+    toks = text.split()
+    while toks and _is_divider_tok(toks[-1]):
+        toks.pop()
+    return ' '.join(toks)
+
+
+def _is_real_item_desc(desc):
+    """Guard against recovering a *false* code — a measurement fragment such as
+    a wrapped "@ 3.3 kg per sqm" line that the code detector mistook for a code
+    (e.g. chapter-3 code "3.3" appearing on a chapter-8 tile page). A genuine
+    DSR item title always begins with a capital letter (Providing, Extra, With,
+    Kota, ...) or a dimension digit ("12 mm cement plaster"); a stolen fragment
+    begins mid-sentence with a lowercase unit word ("kg/ sqm including ...")."""
+    d = (desc or '').strip()
+    return len(d) >= 8 and (d[0].isupper() or d[0].isdigit())
+
+
+def recover_rate(full_text):
+    """Recover (unit, rate, desc) for an item whose rate isn't end-anchored.
+
+    Call ONLY after `_RATE_PATTERN.search(full_text)` on the RAW text failed.
+    Returns None when the text genuinely carries no unit rate (true parent node,
+    or a percentage-rate 'Extra ...' item like 2.24.2 whose rate is '25%'), or
+    when the recovered description doesn't look like a real item title.
+    """
+    # Strip a trailing footnote paragraph, then a trailing all-caps divider.
+    nt = _NOTE_TRUNC_RE.search(full_text)
+    t = full_text[:nt.start()].strip() if nt else full_text
+    t2 = _strip_trailing_dividers(t)
+
+    # Bug A: after removing the trailing junk the rate is now end-anchored.
+    m = _RATE_PATTERN.search(t2)
+    if m:
+        desc = t2[:m.start()].strip()
+        if _is_real_item_desc(desc):
+            return m.group(1).strip(), m.group(2).replace(',', ''), desc
+        return None
+
+    # Bug B: rate sits mid-text with a wrapped description tail after it. Take
+    # the LAST physical-unit rate (rates come late); keep the tail as description.
+    best = None
+    for mm in _EMB_RATE_RE.finditer(t):
+        uw = mm.group(2).strip('.').lower()
+        if uw in _PHYS_UNITS:
+            best = mm
+    if best:
+        before = t[:best.start()].strip()
+        if not before:
+            return None  # a lone "<unit> <n>" with no description is not an item
+        mult = best.group(1)
+        unit = (mult + ' ' if mult else '') + best.group(2).strip()
+        after = _strip_trailing_dividers(t[best.end():].strip())
+        desc = (before + ' ' + after).strip() if after else before
+        if _is_real_item_desc(desc):
+            return unit, best.group(3).replace(',', ''), desc
+
+    return None
+
+
 def parse_standard_pages(pdf_path, skip_pages=None, allow_basic_codes=True,
                          chapter_range=(1, 26)):
     """Parse standard portrait DSR pages with hierarchical description support.
@@ -470,8 +599,23 @@ def parse_standard_pages(pdf_path, skip_pages=None, allow_basic_codes=True,
                 'source_page': source_page,
             })
         elif not is_basic:
-            # Parent/header node (no rate): store its OWN text only (FIX-5).
-            parent_descriptions[code] = full_text
+            # FIX-6: the rate may be present but not end-anchored (trailing
+            # divider/footnote = Bug A, or embedded mid-description = Bug B).
+            # Try to recover it before giving up and treating this as a parent.
+            recovered = recover_rate(full_text)
+            if recovered:
+                unit, rate, desc = recovered
+                full_desc = build_full_description(code, desc, parent_descriptions)
+                items.append({
+                    'code': code,
+                    'description': full_desc,
+                    'unit': unit,
+                    'rate': rate,
+                    'source_page': source_page,
+                })
+            else:
+                # Parent/header node (no rate): store its OWN text only (FIX-5).
+                parent_descriptions[code] = full_text
 
     with pdfplumber.open(pdf_path) as pdf:
         total_pages = len(pdf.pages)
@@ -556,7 +700,10 @@ def parse_standard_pages(pdf_path, skip_pages=None, allow_basic_codes=True,
                     is_basic = bool(match_basic and not match_dotted)
 
                     rate_match = rate_pattern.search(rest)
-                    if rate_match:
+                    # FIX-7: only take the same-line rate when its unit is real;
+                    # otherwise this is a wrapped first line (e.g. "... passing
+                    # 2.36") and the true rate is at the item's end — defer.
+                    if rate_match and (is_basic or _known_unit_word(rate_match.group(1))):
                         unit = rate_match.group(1).strip()
                         rate = rate_match.group(2).strip().replace(',', '')
                         desc = rest[:rate_match.start()].strip()

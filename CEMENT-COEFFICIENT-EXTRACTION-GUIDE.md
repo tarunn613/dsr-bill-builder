@@ -22,17 +22,31 @@ A lookup of **cement consumption per unit of work**, keyed by DSR item code:
   "source": "DSR 2023 Vol 2 — Coefficients for Cement Consumption (PDF pp.306–384)",
   "count": <N>,
   "codes": {
-    "4.1.3": { "code": "4.1.3", "unit": "cum", "coeff": 3.20,
-               "leaf_desc": "1:2:4 (1 cement : 2 coarse sand ... 20 mm nominal size)",
-               "group_desc": "P/L cement concrete - all works upto plinth level :",
-               "full_desc": "P/L cement concrete - all works upto plinth level : — 1:2:4 (...)",
-               "source_page": 348 },
+    "4.1.3":  { "code": "4.1.3", "unit": "cum", "coeff": 3.20,
+                "coeff_source": 3.20, "per": 1, "unit_source": "cum",
+                "leaf_desc": "1:2:4 (1 cement : 2 coarse sand ... 20 mm nominal size)",
+                "group_desc": "P/L cement concrete - all works upto plinth level :",
+                "full_desc": "P/L cement concrete - all works upto plinth level : — 1:2:4 (...)",
+                "source_page": 348 },
+    "13.1.2": { "code": "13.1.2", "unit": "sqm", "coeff": 0.036,
+                "coeff_source": 3.60, "per": 100, "unit_source": "100 sqm",
+                "leaf_desc": "1:6 (1 cement : 6 fine sand)", "source_page": 350 },
     "...": { ... }
   }
 }
 ```
 
-`coeff` = **quantity of cement in Quintals per one unit** of that item (1 Quintal = 100 kg = 2 bags of 50 kg). Consumers compute `cement_qtl = qty × coeff`, `bags = cement_qtl × 2`.
+`coeff` = **quantity of cement in Quintals per ONE unit** of that item (1 Quintal = 100 kg =
+2 bags of 50 kg). Consumers compute `cement_qtl = qty × coeff`, `bags = cement_qtl × 2` — always
+use `coeff`, never `coeff_source`.
+
+**`coeff` vs `coeff_source`/`per` (critical — see §6.11).** Many items print their unit as
+**"100 sqm" / "100 metre" / "10 Nos."**, meaning the printed coefficient is per *that many* units.
+`coeff_source` is the verbatim printed value, `per` is the divisor (1/10/100), `unit_source` is the
+printed unit ("100 sqm"), and **`coeff = coeff_source / per`** is the true per-unit figure the bill
+must multiply by. Storing the printed 3.60 as if it were per-sqm over-counts cement **100×**.
+The hand-made reference bill encodes the same thing by writing `3.60` with a **"/00"** note beside
+it and dividing by 100.
 
 Also load it into the SQLite DB as an authoritative table (see §7).
 
@@ -218,10 +232,11 @@ Every one of these codes must be present with exactly that coefficient.
 
 **B. Structural sanity:**
 - Every key matches `^\d{1,2}(\.\d+)+[A-Za-z]?$` (no bare chapter numbers, no `"1.0"`).
-- Every entry has `unit ∈ {cum, sqm, metre, each, kg, quintal, …}` and `0 < coeff ≤ 15`.
+- Every entry has `unit ∈ {cum, sqm, metre, each, kg, quintal, …}` and `0 < coeff ≤ 15`
+  — check the **effective** `coeff`, not `coeff_source` (§6.13).
 - **Zero** entries whose `leaf_desc` contains "COEFFICIENTS" or "S.H." (header leakage).
 - No duplicate codes.
-- Count is in **[355, 400]**. Far outside → parser broke.
+- Count is in **[355, 550]**. Far outside → parser broke. (Current run: **510**.)
 
 **C. Cross-check against the priced-rate DB (`dsr_items.json`):** the appendix codes
 **are the same codes** as the priced items (verified: 3.1, 4.1.3, 6.1.1, 6.1.2 all
@@ -235,10 +250,12 @@ match by code, unit, and item). So:
   list; they should look like real DSR sub-codes, **not** like `1.5m`, `0.56m`,
   `1.0`, or description fragments (those are false positives — remove them).
 
-**D. Regression vs the existing baseline** (`schedule-builder/backend/data/cement_coeff.json`,
-358 codes, spot-verified accurate): on codes present in **both**, coefficients must
-agree **exactly** (the reference run had **0** disagreements). Investigate every
-diff — one of the two is wrong.
+**D. Regression vs the existing baseline** (`schedule-builder/backend/data/cement_coeff.json`):
+the check is **scale-aware** — on codes present in **both**, the ONLY permitted movement is a
+clean `/per` rescale (new `coeff == old/per` and new `coeff_source == old`); **any other change
+FAILS the build and refuses to write the JSON/DB**. Newly recovered codes show up as "Gained".
+This is the highest-value check in the file: it caught a real 4-code regression (§6.12) that every
+other check passed. Investigate every unexpected diff — one of the two is wrong.
 
 **E. Eyeball 10 random entries** against the PDF (open the `source_page`, find the
 code, confirm description/unit/coeff). Especially check one from each of: mortar,
@@ -270,6 +287,35 @@ concrete, RCC, masonry, sanitary (unit `each`), flooring (`sqm`), steel (`kg`).
 9. **Blank odd pages** — 305, 307, … have no text; skip gracefully.
 10. **Precision** — keep coefficients as given (e.g. `0.625`, `0.836`); don't round.
     Store the float; if you also keep the raw string, verify `float(raw)==coeff`.
+11. **Unit scale — the 100× trap (worst bug found; fixed 2026-07-15).** ~158 of 510 rows print
+    the unit as **"100 sqm" / "100 metre" / "10 Nos."**: an integer at x≈367–382 sitting
+    immediately LEFT of the unit word (x≈386–400), with the coefficient per *that many* units
+    (`13.1.2 … 100 sqm 3.60` = 0.036/sqm). Do **not** dismiss that "100" as a page artifact — an
+    earlier `is_sentinel_100()` did exactly that and over-counted cement 100× on every
+    plaster/pointing/pipe/finishing item. **Rule: a scale is an integer 10/100/1000 in the unit
+    band that is left of a unit word ON THE SAME ROW.** The "same row as the unit" clause is
+    load-bearing: mix-ratio digits (the `10` of `1:5:10`, x≈355, on a no-unit *continuation* line)
+    sit in a similar x range and would otherwise turn concrete `4.1.10A` from 1.3/cum into 0.13.
+    Store `coeff_source`, `per`, `unit_source` alongside the divided `coeff` so it stays auditable.
+12. **Asterisked coefficients = a DIFFERENT material or a per-page footnote — never strip the
+    marker.** The coeff column can carry TWO components: `8.11` prints `8.16 + 3.30*` = ordinary
+    cement **+ white cement**; `3.15` ("White cement mortar 1:2") is a lone `6.80*`; `5.18.x` is
+    `1.64**` whose legend reads "** Cement for fixing only" (the hand-made bill *does* count that
+    one); `20.5.x` pile work also uses a single `*`. **Legends are page-specific — there is no
+    global meaning.** `NUM` rejects `3.30*` naturally; stripping the `*` lets the white-cement
+    value overwrite the real coefficient (this regressed `7.29`/`8.1`/`8.11`/`8.14` and was caught
+    only by check D). ~31 such values are deliberately left unextracted pending a domain decision.
+13. **Range-check the EFFECTIVE coeff, not the printed one.** A per-100 row legitimately prints up
+    to 58.6 (`19.2.5` = 31.72 per 100 metre = 0.3172/metre), so a `0 < raw <= 15` gate silently
+    dropped 19 real codes (`19.2.1-5`, `19.3.3-5`, `13.15`, `13.72`, `26.33/34/38/46/47`). Gate
+    `0 < coeff_source/per <= 15`. Sanity-check recoveries as proportional series against their
+    neighbours (`26.34`: 50mm=16.5, 75mm=24.75=1.5×, 100mm=33.0=2×).
+14. **`&` paired codes (12 rows, still unhandled).** The appendix merges two codes into one entry:
+    `6.12.1 &` on one line, then `6.13.1  100 sqm  14.28` on the next — the description belongs to
+    the first, the coefficient to the second, and **both codes share it**. Also inline
+    (`7.1 & 7.2 … cum 0.825`, `11.39 & …` whose partner is `11.40`). Current parser keeps only the
+    coefficient-bearing code and leaves its `leaf_desc` **empty** — an empty `leaf_desc` is the
+    tell-tale of this pattern.
 
 ---
 
