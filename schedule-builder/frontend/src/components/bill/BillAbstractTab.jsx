@@ -15,22 +15,17 @@ export default function BillAbstractTab({ computed }) {
           <tr><th>S.No</th><th>Description</th><th>Qty</th><th>Unit</th><th>Rate ₹</th><th>Amount ₹</th><th>Source</th></tr>
         </thead>
         <tbody>
-          {computed.items.map((it, i) => {
-            const main = isMain(it.category);
-            const qty = main ? it.measuredQty : it.schedQty;
-            const amt = main ? it.measAmt : it.schedAmt;
-            return (
-              <tr key={i} className={it.category === 'Recovery' ? 'recovery' : ''}>
-                <td className="ctr">{it.sno ?? i + 1}</td>
-                <td>{it.description}</td>
-                <td className="rt">{qty == null ? '' : fmt(qty)}</td>
-                <td className="ctr">{it.unit}</td>
-                <td className="rt">{fmt(it.rate)}</td>
-                <td className="rt">{amt == null ? '' : fmt(amt)}</td>
-                <td className="hint">{main ? 'RE total' : it.category}</td>
-              </tr>
-            );
-          })}
+          {computed.items.map((it, i) => (
+            <tr key={i} className={it.category === 'Recovery' ? 'recovery' : ''}>
+              <td className="ctr">{it.sno ?? i + 1}</td>
+              <td>{it.description}</td>
+              <td className="rt">{it.measuredQty == null ? '' : fmt(it.measuredQty)}</td>
+              <td className="ctr">{it.unit}</td>
+              <td className="rt">{fmt(it.rate)}</td>
+              <td className="rt">{it.measAmt == null ? '' : fmt(it.measAmt)}</td>
+              <td className="hint">{isMain(it.category) ? 'RE total' : `RE total · ${it.category} at par`}</td>
+            </tr>
+          ))}
         </tbody>
       </table>
       <table className="sum-table">

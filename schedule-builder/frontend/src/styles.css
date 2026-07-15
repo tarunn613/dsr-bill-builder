@@ -246,7 +246,6 @@ button.ghost:hover, .upload-btn:hover { background: #eef6ee; }
 .re-table tr.less td { background: #fff5f5; }
 .re-table tr.less .c-amt { color: #b91c1c; }
 .re-table tr.totrow td { background: #ecfdf5; font-weight: 700; }
-.reblk-atpar { display: flex; align-items: center; justify-content: space-between; padding: 10px 13px; font-size: 12.5px; }
 .add-btn.sm { margin: 6px 0 10px 10px; padding: 5px 10px; font-size: 12px; }
 .recovery td { }
 

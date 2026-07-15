@@ -318,7 +318,7 @@ function BillHelp() {
       <Legend
         items={[
           { color: '#e8f3e8', border: '#2e6b34', label: 'DSR / Appd.', desc: 'main items — factored, measured in RE' },
-          { color: '#eef6ff', border: '#0b6bcb', label: 'MKT', desc: 'added at par, billed at the scheduled quantity' },
+          { color: '#eef6ff', border: '#0b6bcb', label: 'MKT', desc: 'added at par (no factor / cost index) — still measured in RE' },
           { color: '#fef3f2', border: '#b91c1c', label: 'Recovery', desc: 'subtracted from the total — shown in red' },
         ]}
       />

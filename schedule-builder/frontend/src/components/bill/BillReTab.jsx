@@ -1,6 +1,5 @@
 import React from 'react';
 
-const isMain = (c) => !(c === 'MKT' || c === 'Recovery');
 const fmt2 = (n) => (n == null ? '' : Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 const mul = (x) => (x === '' || x == null ? 1 : (isFinite(Number(x)) ? Number(x) : 1));
 
@@ -68,34 +67,19 @@ function Block({ item, itemNo, list, setList }) {
   );
 }
 
-// MKT / Recovery items aren't measured — the calc chain bills them at their
-// scheduled quantity (see bill-core.js's computeBill), so there's nothing to
-// enter here. Mirrors the same "at par" line bill-excel.js writes to the RE
-// sheet, just so the on-screen preview isn't silently missing these items.
-function AtParBlock({ item, itemNo }) {
-  return (
-    <div className="reblk">
-      <BlockHead itemNo={itemNo} item={item} />
-      <div className="reblk-atpar">
-        <span className="hint">Quantity as per Schedule (billed at par)</span>
-        <b>{item.qty === '' || item.qty == null ? '—' : item.qty}{item.unit ? ` ${item.unit}` : ''}</b>
-      </div>
-    </div>
-  );
-}
-
+// Every item is measured here — MKT / Recovery included. "At par" only means their
+// rate skips the multiplying factor and cost index in the calc chain (see
+// bill-core.js), not that their quantity is taken from the Schedule.
 export default function BillReTab({ rows, measById, setMeasById, snoById = {} }) {
   if (!rows.length) return <div className="empty">Add items in the Schedule tab first.</div>;
   return (
     <div>
       <div className="bar"><strong>RE — Record of Measurements</strong>
-        <span className="hint">Qty = Nos × Factor × L × W × H (blanks = 1). Use a negative “Nos” for “less” deductions. MKT / Recovery items are billed at their scheduled quantity, not measured here.</span></div>
+        <span className="hint">Qty = Nos × Factor × L × W × H (blanks = 1). Use a negative “Nos” for “less” deductions. Every item is measured here — MKT / Recovery are added at par (no factor / cost index) but still billed on their measured quantity.</span></div>
       {rows.map((r) => (
-        isMain(r.category)
-          ? <Block key={r.id} item={r} itemNo={snoById[r.id]}
-              list={measById[r.id]}
-              setList={(list) => setMeasById({ ...measById, [r.id]: list })} />
-          : <AtParBlock key={r.id} item={r} itemNo={snoById[r.id]} />
+        <Block key={r.id} item={r} itemNo={snoById[r.id]}
+          list={measById[r.id]}
+          setList={(list) => setMeasById({ ...measById, [r.id]: list })} />
       ))}
     </div>
   );

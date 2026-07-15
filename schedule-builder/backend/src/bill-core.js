@@ -11,6 +11,11 @@
 //   less quoted % (below → subtract, above → add)
 //   = Work Outlay   (rounded to nearest rupee)
 //
+// "At par" describes only where MKT/Recovery enter the chain — straight into the
+// subtotal, with NO multiplying factor and NO cost index applied to their rate.
+// It says nothing about where their QUANTITY comes from: like every other item,
+// they are measured in RE and billed on the measured quantity.
+//
 // The Abstract runs the SAME chain but on measured quantities (from RE),
 // leaving amounts blank until measurements are entered.
 
@@ -106,9 +111,10 @@ function computeBill(payload = {}) {
   const schedMain = mainItems.reduce((s, x) => s + x.schedAmt, 0);
   const schedMkt = mktItems.reduce((s, x) => s + x.schedAmt, 0);
   const measMain = mainItems.reduce((s, x) => s + (x.measAmt || 0), 0);
-  // MKT / Recovery are billed at their scheduled quantity (Abstract pulls their
-  // qty from the Schedule, not RE), so the measured chain uses their scheduled amount.
-  const measMkt = mktItems.reduce((s, x) => s + x.schedAmt, 0);
+  // MKT / Recovery are measured in RE exactly like main items — "at par" only means
+  // their rate skips the factor / cost index (see the chain above), not that their
+  // quantity comes from the Schedule. Blank until measured, same as everything else.
+  const measMkt = mktItems.reduce((s, x) => s + (x.measAmt || 0), 0);
 
   return {
     items, factor, ciPct, quotedPct, quotedType,

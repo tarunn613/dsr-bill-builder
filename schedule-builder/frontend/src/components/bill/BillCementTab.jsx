@@ -36,12 +36,11 @@ function QtySourceBadge({ source }) {
   if (!source) return null;
   const cfg = {
     measured: { label: 'RE', bg: '#dbeafe', color: '#1d4ed8', title: 'Quantity from Record of Measurements (RE tab)' },
-    scheduled: { label: 'Sched', bg: '#f3f4f6', color: '#6b7280', title: 'MKT/Recovery item — billed at scheduled quantity (no RE concept for these), same as the exported bill' },
     unmeasured: { label: 'Not measured', bg: '#fee2e2', color: '#b91c1c', title: 'No RE measurement entered yet — this row is blank in the exported bill until one is added. Enter an RE measurement, or override the quantity below.' },
     overridden: { label: 'Edit', bg: '#fef3c7', color: '#d97706', title: 'Quantity manually overridden by user' },
     manual: { label: 'Manual', bg: '#f3f4f6', color: '#6b7280', title: 'Quantity entered manually for this cement row' },
   };
-  const c = cfg[source] || cfg.scheduled;
+  const c = cfg[source] || cfg.manual;
   return (
     <span title={c.title} style={{
       display: 'inline-block', fontSize: 9, fontWeight: 700,
@@ -225,22 +224,14 @@ export default function BillCementTab({
   const viewFetch = clean
     .map((r, i) => {
       const it = items[i] || {};
-      const isMainCat = !(it.category === 'MKT' || it.category === 'Recovery');
 
-      // Quantity logic — mirrors the exported Abstract sheet exactly: MKT/Recovery
-      // items are always billed at their scheduled quantity (Abstract pulls their
-      // qty straight from the Schedule, no RE concept for them); ordinary DSR/Appd.
-      // items use ONLY the RE-measured quantity, with NO schedule fallback — left
-      // unmeasured (blank) until an RE row exists, same as the export's own
-      // IF(RE!H="","",RE!H) formula. (Previously this silently fell back to the
-      // schedule quantity, so the on-screen total didn't match what the exported
-      // bill would actually contain.)
+      // Quantity logic — mirrors the exported Abstract sheet exactly: EVERY item
+      // (MKT / Recovery included) uses ONLY the RE-measured quantity, with NO schedule
+      // fallback — left unmeasured (blank) until an RE row exists, same as the export's
+      // own IF(RE!H="","",RE!H) formula.
       let baseQty;
       let qtySource;
-      if (!isMainCat) {
-        baseQty = it.schedQty != null ? it.schedQty : n(r.qty);
-        qtySource = 'scheduled';
-      } else if (it.measuredQty != null) {
+      if (it.measuredQty != null) {
         baseQty = it.measuredQty;
         qtySource = 'measured';
       } else {
@@ -758,10 +749,9 @@ export default function BillCementTab({
           </table>
           {cementMode === 'fetch' && (
             <p className="cem-sum-note">
-              Quantities are <strong>RE-measured</strong> for DSR/Appd. items (same as the exported bill) and
-              <strong> scheduled</strong> for MKT/Recovery items. Rows marked <QtySourceBadge source="unmeasured" /> have
-              no RE measurement yet and show blank here and in the export — enter one in the RE tab, or override the
-              quantity below.
+              Quantities are <strong>RE-measured</strong> for every item (same as the exported bill). Rows marked
+              <QtySourceBadge source="unmeasured" /> have no RE measurement yet and show blank here and in the
+              export — enter one in the RE tab, or override the quantity below.
             </p>
           )}
         </div>

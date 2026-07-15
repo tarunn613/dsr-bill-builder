@@ -150,8 +150,7 @@ function buildBillWorkbook(payload = {}) {
   sumLabel(r + 2, 'Work Outlay (Rs.)', `ROUND(G${subRow}${below ? '-' : '+'}G${lessRow},0)`);
 
   // ============ RE (one measurement block per item; the signature line sits
-  //   OUTSIDE the table, and every item is captured — DSR/Appd get a measured
-  //   grid, MKT/Recovery are shown "at par" i.e. at their scheduled quantity) ============
+  //   OUTSIDE the table, and every item is measured — MKT/Recovery included) ============
   const re = wb.addWorksheet('RE', { views: [{ showGridLines: false }] });
   re.columns = [{ width: 7 }, { width: 36 }, { width: 8 }, { width: 8 }, { width: 11 }, { width: 11 }, { width: 12 }, { width: 13 }, { width: 9 }];
   headerBlock(re, meta, 9, 'Record Entry', 'Schedule');
@@ -168,7 +167,6 @@ function buildBillWorkbook(payload = {}) {
   let ry = 17;
   for (const i of ordered) {
     const sr = schedRow[i];
-    const mainItem = isMain(rows[i].category || 'DSR');
     re.getCell(`B${ry}`).value = 'Date of Measurement:-'; re.getCell(`B${ry}`).font = { bold: true };
     re.getCell(`H${ry}`).value = 'P-'; re.getCell(`H${ry}`).font = { bold: true };
     colHeaderRow(re, ry + 1, ['S.No', 'Description', 'Nos', 'Nos', 'Length', 'Width', 'Height /Depth', 'Quantity', 'Unit']);
@@ -179,32 +177,26 @@ function buildBillWorkbook(payload = {}) {
     re.getCell(`B${itemRow}`).alignment = { wrapText: true, vertical: 'top' };
     re.getRow(itemRow).height = descHeight(rows[i].description, 34);
 
-    let tRow;
-    if (mainItem) {
-      // measured grid: Qty = PRODUCT(Nos, factor, L, W, H); item Total = SUM(rows)
-      const mrows = (meas[i] || []).filter((m) => m && (m.n !== '' && m.n != null));
-      const nMeas = Math.max(mrows.length, 6);
-      const ms = itemRow + 1, me = ms + nMeas - 1;
-      for (let k = 0; k < nMeas; k++) {
-        const rr = ms + k, m = mrows[k] || {};
-        const put = (col, val) => { const c = re.getCell(rr, col); if (val !== '' && val != null) c.value = num(val); c.fill = YELLOW; c.border = BORDER; c.alignment = { horizontal: 'right' }; };
-        const b = re.getCell(rr, 2); b.value = m.label || ''; b.fill = YELLOW; b.border = BORDER; b.alignment = { wrapText: true };
-        re.getCell(rr, 1).border = BORDER;
-        put(3, m.n); put(4, m.f); put(5, m.l); put(6, m.w); put(7, m.h);
-        const h = re.getCell(rr, 8); h.value = { formula: `IF(C${rr}="","",PRODUCT(C${rr}:G${rr}))` }; h.numFmt = QTY; h.border = BORDER; h.alignment = { horizontal: 'right' };
-        re.getCell(rr, 9).border = BORDER;
-      }
-      tRow = me + 1;
-      const th = re.getCell(`H${tRow}`); th.value = { formula: `IF(SUM(H${ms}:H${me})=0,"",SUM(H${ms}:H${me}))` }; th.numFmt = QTY; th.font = { bold: true };
-    } else {
-      // MKT / Recovery: billed at scheduled quantity (at par) — recorded here so RE is complete
-      const atRow = itemRow + 1;
-      const lbl = re.getCell(`B${atRow}`); lbl.value = 'Quantity as per Schedule (billed at par)'; lbl.alignment = { wrapText: true }; lbl.border = BORDER;
-      const q = re.getCell(`H${atRow}`); q.value = { formula: `IF(Schedule!D${sr}="","",Schedule!D${sr})` }; q.numFmt = QTY; q.border = BORDER; q.alignment = { horizontal: 'right' };
-      for (const c of ['A', 'C', 'D', 'E', 'F', 'G', 'I']) re.getCell(`${c}${atRow}`).border = BORDER;
-      tRow = atRow + 1;
-      const th = re.getCell(`H${tRow}`); th.value = { formula: `IF(Schedule!D${sr}="","",Schedule!D${sr})` }; th.numFmt = QTY; th.font = { bold: true };
+    // Every item gets the measured grid — MKT / Recovery included. Their "at par"
+    // treatment is purely about the rate (no factor / cost index, applied further down
+    // in the Schedule and Abstract summaries); the quantity is measured here like any
+    // other item. This total is what the Abstract multiplies by the rate, so a bare
+    // link to Schedule!D here would hard-code the tendered quantity and make the
+    // measurements typed into this grid have no effect on the bill.
+    const mrows = (meas[i] || []).filter((m) => m && (m.n !== '' && m.n != null));
+    const nMeas = Math.max(mrows.length, 6);
+    const ms = itemRow + 1, me = ms + nMeas - 1;
+    for (let k = 0; k < nMeas; k++) {
+      const rr = ms + k, m = mrows[k] || {};
+      const put = (col, val) => { const c = re.getCell(rr, col); if (val !== '' && val != null) c.value = num(val); c.fill = YELLOW; c.border = BORDER; c.alignment = { horizontal: 'right' }; };
+      const b = re.getCell(rr, 2); b.value = m.label || ''; b.fill = YELLOW; b.border = BORDER; b.alignment = { wrapText: true };
+      re.getCell(rr, 1).border = BORDER;
+      put(3, m.n); put(4, m.f); put(5, m.l); put(6, m.w); put(7, m.h);
+      const h = re.getCell(rr, 8); h.value = { formula: `IF(C${rr}="","",PRODUCT(C${rr}:G${rr}))` }; h.numFmt = QTY; h.border = BORDER; h.alignment = { horizontal: 'right' };
+      re.getCell(rr, 9).border = BORDER;
     }
+    const tRow = me + 1;
+    const th = re.getCell(`H${tRow}`); th.value = { formula: `IF(SUM(H${ms}:H${me})=0,"",SUM(H${ms}:H${me}))` }; th.numFmt = QTY; th.font = { bold: true };
     re.getCell(`G${tRow}`).value = 'Total'; re.getCell(`G${tRow}`).font = { bold: true }; re.getCell(`G${tRow}`).alignment = { horizontal: 'right' };
     re.getCell(`I${tRow}`).value = { formula: `IF(Schedule!E${sr}="","",Schedule!E${sr})` };
     for (const c of ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I']) re.getCell(`${c}${tRow}`).border = BORDER;
@@ -229,10 +221,11 @@ function buildBillWorkbook(payload = {}) {
     ab.getCell(`B${descRow}`).alignment = { wrapText: true, vertical: 'top' };
     ab.getRow(descRow).height = descHeight(rows[i].description, 62);
     for (let c = 1; c <= 6; c++) ab.getCell(descRow, c).border = BORDER;
-    // qty: from RE total for main items, from schedule qty for mkt/recovery
-    ab.getCell(`B${qtyRow}`).value = main ? 'Qty. B/F from RE -            at P -' : 'As per schedule';
+    // qty: brought forward from the RE total for EVERY item, MKT / Recovery included —
+    // "at par" only exempts them from the factor / cost index below, not from measurement.
+    ab.getCell(`B${qtyRow}`).value = 'Qty. B/F from RE -            at P -';
     const qC = ab.getCell(`C${qtyRow}`);
-    qC.value = { formula: main ? `IF(RE!H${reTotalRow[i]}="","",RE!H${reTotalRow[i]})` : `Schedule!D${sr}` };
+    qC.value = { formula: `IF(RE!H${reTotalRow[i]}="","",RE!H${reTotalRow[i]})` };
     qC.numFmt = QTY; qC.alignment = { horizontal: 'right' };
     ab.getCell(`D${qtyRow}`).value = { formula: `IF(Schedule!E${sr}="","",Schedule!E${sr})` };
     ab.getCell(`E${qtyRow}`).value = { formula: `IF(Schedule!F${sr}="","",Schedule!F${sr})` };
