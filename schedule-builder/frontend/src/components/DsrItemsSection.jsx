@@ -44,9 +44,12 @@ function DsrRow({ index, item, patch, remove }) {
       {/* S.No is editable and defaults to position — imports (JSON/OCR) fill in the
           schedule's own serial number here, which must be shown verbatim (never
           re-sorted or renumbered) since AE/JE sign off by cross-checking this number
-          against their BOQ. */}
+          against their BOQ. `value` binds straight to item.sno (no `|| default`
+          fallback — that would snap a backspaced field back to the position number),
+          so clearing the box leaves it truly blank; a blank S.No still falls back to
+          the position downstream (see effectiveSno in bill-core / core.js). */}
       <td className="c-sno">
-        <input className="sno-input" value={item.sno || String(index + 1)}
+        <input className="sno-input" value={item.sno ?? ''}
           onChange={(e) => patch({ sno: e.target.value })} />
       </td>
       <td className="c-cat">

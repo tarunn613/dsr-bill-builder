@@ -12,9 +12,11 @@ function MarketRow({ index, startSno, item, patch, remove }) {
   return (
     <tr>
       {/* Editable, defaults to position — see DsrItemsSection for why: imports carry
-          the schedule's own serial number here and it must never be re-derived. */}
+          the schedule's own serial number here and it must never be re-derived.
+          `value` binds straight to item.sno so backspacing clears the box to blank
+          (no fallback that would snap it back to the default). */}
       <td className="c-sno">
-        <input className="sno-input" value={item.sno || String(startSno + index)}
+        <input className="sno-input" value={item.sno ?? ''}
           onChange={(e) => patch({ sno: e.target.value })} />
       </td>
       <td className="c-ref">

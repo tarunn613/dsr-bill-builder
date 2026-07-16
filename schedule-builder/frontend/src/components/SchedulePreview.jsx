@@ -24,8 +24,11 @@ export default function SchedulePreview({ computed, header }) {
           </tr>
         </thead>
         <tbody>
-          {dsrRows.map((r) => (
-            <tr key={'d' + r.sno}>
+          {/* key by position, not r.sno: S.No is user-editable and may repeat (or two
+              blank rows can both fall back to the same number), which would collide
+              React keys and make rows duplicate/omit in this preview. */}
+          {dsrRows.map((r, i) => (
+            <tr key={'d' + i}>
               <td className="ctr">{r.sno}</td>
               <td className="ctr">{r.ref}</td>
               <td>{r.description}</td>
@@ -46,8 +49,8 @@ export default function SchedulePreview({ computed, header }) {
               <tr className="sum"><td colSpan={6} className="rt b">Corrected DSR Total</td><td className="ctr">C1</td><td className="rt b">{fmt(computed.c1)}</td></tr>
             </>
           )}
-          {marketRows.map((r) => (
-            <tr key={'m' + r.sno}>
+          {marketRows.map((r, i) => (
+            <tr key={'m' + i}>
               <td className="ctr">{r.sno}</td>
               <td className="ctr">{r.ref}</td>
               <td>{r.description}</td>
@@ -67,8 +70,8 @@ export default function SchedulePreview({ computed, header }) {
         <div className="preview-overrides">
           <b>* Rate overrides (deviating from DSR 2023):</b>
           <ul>
-            {dsrRows.filter((r) => r.deviates).map((r) => (
-              <li key={r.sno}>Item {r.sno} ({r.ref}): used ₹{fmt(r.rate)} — DSR book rate ₹{fmt(r.bookRate)}</li>
+            {dsrRows.filter((r) => r.deviates).map((r, i) => (
+              <li key={i}>Item {r.sno} ({r.ref}): used ₹{fmt(r.rate)} — DSR book rate ₹{fmt(r.bookRate)}</li>
             ))}
           </ul>
         </div>
