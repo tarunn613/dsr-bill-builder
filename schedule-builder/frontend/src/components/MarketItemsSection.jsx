@@ -43,10 +43,17 @@ function MarketRow({ index, startSno, item, patch, remove }) {
   );
 }
 
-export default function MarketItemsSection({ items, setItems, startSno }) {
+export default function MarketItemsSection({ items, setItems, startSno, onCleared }) {
   const patchAt = (id, changes) => setItems(items.map((it) => (it.id === id ? { ...it, ...changes } : it)));
   const removeAt = (id) => setItems(items.filter((it) => it.id !== id));
   const add = () => setItems([...items, { ...newMarketItem(), sno: String(startSno + items.length) }]);
+  const removeAll = () => {
+    if (items.length === 0) return;
+    if (window.confirm(`Remove all ${items.length} market item${items.length === 1 ? '' : 's'}? This cannot be undone.`)) {
+      setItems([]);
+      if (onCleared) onCleared();
+    }
+  };
 
   return (
     <section className="card">
@@ -77,7 +84,10 @@ export default function MarketItemsSection({ items, setItems, startSno }) {
           )}
         </tbody>
       </table>
-      <button className="add-btn" onClick={add}>+ Add market item</button>
+      <div className="section-actions">
+        <button className="add-btn" onClick={add}>+ Add market item</button>
+        <button className="ghost danger" onClick={removeAll} disabled={items.length === 0} title="remove every market item row">Remove all</button>
+      </div>
     </section>
   );
 }

@@ -110,10 +110,17 @@ function DsrRow({ index, item, patch, remove }) {
   );
 }
 
-export default function DsrItemsSection({ items, setItems }) {
+export default function DsrItemsSection({ items, setItems, onCleared }) {
   const patchAt = (id, changes) => setItems(items.map((it) => (it.id === id ? { ...it, ...changes } : it)));
   const removeAt = (id) => setItems(items.filter((it) => it.id !== id));
   const add = () => setItems([...items, { ...newDsrItem(), sno: String(items.length + 1) }]);
+  const removeAll = () => {
+    if (items.length === 0) return;
+    if (window.confirm(`Remove all ${items.length} DSR item${items.length === 1 ? '' : 's'}? This cannot be undone.`)) {
+      setItems([]);
+      if (onCleared) onCleared();
+    }
+  };
 
   return (
     <section className="card">
@@ -145,7 +152,10 @@ export default function DsrItemsSection({ items, setItems }) {
           )}
         </tbody>
       </table>
-      <button className="add-btn" onClick={add}>+ Add DSR item</button>
+      <div className="section-actions">
+        <button className="add-btn" onClick={add}>+ Add DSR item</button>
+        <button className="ghost danger" onClick={removeAll} disabled={items.length === 0} title="remove every DSR item row">Remove all</button>
+      </div>
     </section>
   );
 }

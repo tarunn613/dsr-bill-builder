@@ -232,7 +232,10 @@ export async function createSession(name) {
   const res = await fetch('/api/sessions', {
     method: 'POST', headers: JSON_HEADERS, body: JSON.stringify({ name }),
   });
-  if (!res.ok) throw new Error('could not create session');
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.error || 'could not create session');
+  }
   return res.json();
 }
 
@@ -246,7 +249,10 @@ export async function updateSession(id, patch) {
   const res = await fetch(`/api/sessions/${id}`, {
     method: 'PUT', headers: JSON_HEADERS, body: JSON.stringify(patch),
   });
-  if (!res.ok) throw new Error('could not save session');
+  if (!res.ok) {
+    const e = await res.json().catch(() => ({}));
+    throw new Error(e.error || 'could not save session');
+  }
   return res.json();
 }
 

@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { parseJsonImport, rematchJsonRow } from '../api.js';
+import React, { useEffect, useState } from 'react';
+import { parseJsonImport } from '../api.js';
+import DsrCodeSearch from './DsrCodeSearch.jsx';
 
 // A full-screen "JSON import workspace" that opens over the DSR → Schedule
 // page — the companion to OcrImportModal for when the user already has a
@@ -94,7 +95,6 @@ export default function JsonImportModal({ onClose, onApply }) {
   const [result, setResult] = useState(null);
   const [rows, setRows] = useState([]);
   const [useBookRate, setUseBookRate] = useState(true);
-  const timers = useRef({});
 
   // Esc closes; lock body scroll while open.
   useEffect(() => {
@@ -123,24 +123,16 @@ export default function JsonImportModal({ onClose, onApply }) {
   const patch = (id, changes) => setRows((rs) => rs.map((r) => (r.id === id ? { ...r, ...changes } : r)));
   const removeRow = (id) => setRows((rs) => rs.filter((r) => r.id !== id));
 
-  // Re-match a DSR code the user edited → adopt the canonical DSR fields.
-  // Only DSR rows have a database row to re-match against — Appd./MKT rates
-  // are never looked up (they don't exist in the DSR book).
-  function onCodeEdit(row, code) {
-    patch(row.id, { code });
-    if (row.category !== 'DSR') return;
-    clearTimeout(timers.current[row.id]);
-    timers.current[row.id] = setTimeout(async () => {
-      const m = await rematchJsonRow(code, row.description);
-      if (!m) return;
-      patch(row.id, {
-        match: m.status, confidence: m.confidence, candidates: m.candidates || [],
-        ...(m.item ? {
-          code: m.code, description: m.item.description, unit: m.item.unit,
-          rate: m.item.rate, carriage: m.item.carriage, rateOptions: m.item.rate_options || null,
-        } : {}),
-      });
-    }, 400);
+  // Free-typing into the DSR code box (no dropdown pick yet) just records the
+  // raw text and drops the row to "Manual" — it must NOT silently re-guess and
+  // overwrite the code from the description in the background: that's what
+  // made backspacing the box appear to snap back to an unrelated code. The
+  // only way to adopt a DB row's canonical code/description/unit/rate now is
+  // an explicit pick from the DsrCodeSearch dropdown (pickCandidate below),
+  // exactly like adding a DSR item manually on the Schedule page.
+  function onCodeType(row, code) {
+    if (row.category !== 'DSR') { patch(row.id, { code }); return; }
+    patch(row.id, { code, match: 'manual', confidence: 0, candidates: [] });
   }
 
   function pickCandidate(row, cand) {
@@ -279,18 +271,16 @@ export default function JsonImportModal({ onClose, onApply }) {
                           </select>
                         </td>
                         <td className="c-cd">
-                          <input value={r.code || ''} placeholder={r.category === 'MKT' ? '—' : 'code'} onChange={(e) => onCodeEdit(r, e.target.value)} />
-                          {r.match === 'ambiguous' && r.candidates?.length > 1 && (
-                            <select className="ocr-cands" value="" onChange={(e) => { const c = r.candidates.find((x) => x.code === e.target.value); if (c) pickCandidate(r, c); }}>
-                              <option value="">{r.candidates.length} options…</option>
-                              {r.candidates.map((c) => <option key={c.code} value={c.code}>{c.code} — {String(c.description).slice(0, 40)}</option>)}
-                            </select>
+                          {r.category === 'DSR' ? (
+                            <DsrCodeSearch value={r.code} onSelect={(cand) => pickCandidate(r, cand)} onChange={(val) => onCodeType(r, val)} />
+                          ) : (
+                            <input value={r.code || ''} placeholder={r.category === 'MKT' ? '—' : 'code'} onChange={(e) => patch(r.id, { code: e.target.value })} />
                           )}
                         </td>
                         <td className="c-ds"><textarea rows={2} value={r.description || ''} onChange={(e) => patch(r.id, { description: e.target.value })} /></td>
                         <td className="c-qt"><input value={r.qty || ''} onChange={(e) => patch(r.id, { qty: e.target.value })} /></td>
                         <td className="c-un"><input value={r.unit || ''} onChange={(e) => patch(r.id, { unit: e.target.value })} /></td>
-                        <td className="c-rt"><input value={r.carriage ? '' : (r.rate ?? '')} placeholder={r.carriage ? 'lead' : ''} disabled={r.carriage} onChange={(e) => patch(r.id, { rate: e.target.value })} /></td>
+                        <td className="c-rt"><input value={r.carriage ? '' : (r.rate ?? '')} placeholder={r.carriage ? 'lead' : ''} disabled title="fixed to the DSR book rate here — override it after adding the item to the schedule" /></td>
                         <td className="c-sn" title="serial number from the source JSON">{r.s_no}</td>
                         <td className="c-rm"><button className="del-btn" onClick={() => removeRow(r.id)} title="remove row">✕</button></td>
                       </tr>

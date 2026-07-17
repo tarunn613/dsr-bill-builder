@@ -64,9 +64,10 @@ export default function SessionsPage() {
     finally { setBusy(''); e.target.value = ''; }
   }
 
-  // "Other tenders" is everything except whichever session is active; when
-  // nothing is active this is naturally just the full list.
-  const others = sessions.filter((s) => s.id !== activeId);
+  // "All tenders" lists every session, active one included, in the order the
+  // backend sends (last-saved first). The open tender is marked in place with a
+  // green bar — never pulled to the top, so a tender keeps the position the user
+  // last saw it in.
   // the active session's list-summary row (counts), separate from the full
   // `session` detail object (which carries exports/imports as arrays, not counts).
   const activeSummary = sessions.find((s) => s.id === activeId);
@@ -105,19 +106,18 @@ export default function SessionsPage() {
         )}
 
         <div className="sessions-grid">
-          {/* ---- left: every tender that isn't the active one ---- */}
+          {/* ---- left: every tender, the open one marked with a green bar ---- */}
           <section className="sessions-col-side">
-            <h2 className="section-h">Other tenders</h2>
-            {others.length === 0 ? (
+            <h2 className="section-h">All tenders</h2>
+            {sessions.length === 0 ? (
               <p className="empty sm">
-                {sessions.length === 0
-                  ? <>No sessions yet. Click <b>+ New session</b> above to start a tender.</>
-                  : 'No other tenders — everything you have is the active one.'}
+                No sessions yet. Click <b>+ New session</b> above to start a tender.
               </p>
             ) : (
               <div className="tender-cards">
-                {others.map((s) => (
+                {sessions.map((s) => (
                   <article key={s.id} className="tender-card">
+                    {s.id === activeId && <div className="tender-card-bar" />}
                     {renaming === s.id ? (
                       <div className="rename-row">
                         <input

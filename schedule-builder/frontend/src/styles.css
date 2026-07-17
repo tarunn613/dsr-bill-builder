@@ -82,6 +82,9 @@ input[type="number"] { -moz-appearance: textfield; }
 /* ---- setup ---- */
 .setup-row { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
 .setup-row .spacer { flex: 1 1 20px; }
+/* Factor + cost index as one flex item so a wrap always moves them to the next
+   line together, never splitting the pair across rows. */
+.setup-pair { display: flex; align-items: flex-end; gap: 12px; }
 button.secondary {
   background: var(--green-2); color: #fff; border: 0; padding: 7px 12px;
   border-radius: 6px; cursor: pointer; font-weight: 600; height: 32px;
@@ -112,15 +115,22 @@ td.c-amt { font-weight: 600; }
   padding: 7px 12px; border-radius: 6px; cursor: pointer; font-weight: 600;
 }
 .add-btn:hover { background: #e2f2e2; }
+.section-actions { display: flex; align-items: center; gap: 10px; }
+.section-actions .add-btn { margin-top: 8px; }
+.section-actions button.ghost.danger { margin-top: 8px; padding: 7px 12px; }
+.section-actions button.ghost.danger:disabled { opacity: .45; cursor: not-allowed; }
 .del-btn { background: none; border: 0; color: #b91c1c; cursor: pointer; font-size: 13px; padding: 2px; width: auto; }
 .lead-select { margin-top: 4px; }
 
 /* ---- dsr autocomplete ---- */
 .dsr-search { position: relative; }
+/* Portaled to <body> and positioned via inline left/width/top|bottom (computed
+   from the input's live bounding rect — see DsrCodeSearch.jsx), so only the
+   visual/scroll styling lives here; placement is deliberately NOT set in CSS. */
 .dsr-dropdown {
-  position: absolute; z-index: 30; left: 0; right: 0; top: 100%; margin-top: 2px;
+  position: fixed; z-index: 1000;
   background: #fff; border: 1px solid #b7c0cc; border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,.16);
-  max-height: 320px; overflow: auto; min-width: 420px;
+  max-height: 320px; overflow: auto;
 }
 .dsr-hint { padding: 8px 10px; color: var(--muted); font-size: 12px; }
 .dsr-option { padding: 6px 9px; cursor: pointer; border-bottom: 1px solid #f0f0f0; }
@@ -798,10 +808,14 @@ button.ghost.danger:hover { background: #fde8e8; }
 
 .tender-cards { display: flex; flex-direction: column; gap: 12px; }
 .tender-card {
-  background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px;
+  position: relative; overflow: hidden;
+  background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px 16px 22px;
   box-shadow: 0 1px 3px rgba(0,0,0,.04); transition: box-shadow .15s, border-color .15s;
 }
 .tender-card:hover { border-color: var(--green-2); box-shadow: 0 6px 18px rgba(15,78,35,.09); }
+/* the open tender, marked in place. Same bar as .active-hero-bar; the left
+   padding above is on every card so titles stay aligned down the column. */
+.tender-card-bar { position: absolute; top: 0; left: 0; width: 6px; height: 100%; background: linear-gradient(180deg, var(--green), var(--green-2)); }
 .tender-card .rename-row { padding: 2px 0; }
 .tc-title { margin: 0; font-size: 15.5px; font-weight: 700; color: #111827; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tc-meta { margin: 5px 0 0; color: var(--muted); font-size: 11.5px; line-height: 1.5; }

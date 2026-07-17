@@ -123,14 +123,46 @@ export function listSessions() {
   return out;
 }
 
+// Every tender name must be unique (trimmed, case-insensitive) so the Sessions
+// list, Home page and exported .dbill filenames are never ambiguous about which
+// tender is which. `excludeId` lets a rename check every OTHER session without
+// tripping over the session's own current name.
+function nameTaken(name, excludeId) {
+  const norm = String(name || '').trim().toLowerCase();
+  if (!norm) return false;
+  const base = baseDir();
+  for (const entry of readdirSync(base)) {
+    if (!ID_RE.test(entry) || entry === excludeId) continue;
+    const s = readSession(entry);
+    if (s && String(s.name || '').trim().toLowerCase() === norm) return true;
+  }
+  return false;
+}
+
+// Append " (2)", " (3)", ... until the name is free. Used only for imports,
+// which have no interactive moment to ask the user for a different name — a
+// clash there gets silently resolved instead of blocked, matching the rest of
+// the app's "nothing is ever lost" behaviour.
+function dedupeName(name) {
+  const base = String(name || '').trim() || 'Untitled tender';
+  if (!nameTaken(base)) return base;
+  let n = 2;
+  while (nameTaken(`${base} (${n})`)) n++;
+  return `${base} (${n})`;
+}
+
 export function createSession(name) {
+  const finalName = String(name || '').trim() || 'Untitled tender';
+  if (nameTaken(finalName)) {
+    throw new Error(`A tender named "${finalName}" already exists — please choose a different name.`);
+  }
   const id = randomUUID();
   const dir = sessionDir(id);
   mkdirSync(join(dir, 'exports'), { recursive: true });
   const now = Date.now();
   const session = {
     id,
-    name: String(name || '').trim() || 'Untitled tender',
+    name: finalName,
     app: 'dyanamic-bill-builder',
     version: 1,
     createdAt: now,
@@ -149,7 +181,13 @@ export function getSession(id) {
 export function updateSession(id, patch = {}) {
   const s = readSession(id);
   if (!s) return null;
-  if (typeof patch.name === 'string' && patch.name.trim()) s.name = patch.name.trim();
+  if (typeof patch.name === 'string' && patch.name.trim()) {
+    const newName = patch.name.trim();
+    if (nameTaken(newName, id)) {
+      throw new Error(`A tender named "${newName}" already exists — please choose a different name.`);
+    }
+    s.name = newName;
+  }
   if (patch.state && typeof patch.state === 'object') {
     s.state = { ...s.state, ...patch.state };
   }
@@ -226,7 +264,7 @@ export function importSessionPackage(buffer) {
   const s = readSession(id) || incoming;
   const now = Date.now();
   s.id = id;
-  s.name = (String(incoming.name || 'Imported tender').trim() || 'Imported tender');
+  s.name = dedupeName(String(incoming.name || 'Imported tender').trim() || 'Imported tender');
   s.createdAt = incoming.createdAt || now;
   s.updatedAt = now;
   // ensure the archive subfolders exist even if the package had none

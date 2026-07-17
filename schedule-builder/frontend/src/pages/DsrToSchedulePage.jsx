@@ -32,7 +32,7 @@ export default function DsrToSchedulePage() {
   const [costIndexPct, setCostIndexPct] = useState(() => slice?.costIndexPct ?? '0');
   const [dsrItems, setDsrItems] = useState(() => slice?.dsrItems || []);
   const [marketItems, setMarketItems] = useState(() => slice?.marketItems || []);
-  const [nDsr, setNDsr] = useState(() => slice?.nDsr ?? '1');
+  const [nDsr, setNDsr] = useState(() => slice?.nDsr ?? '0');
   const [nMkt, setNMkt] = useState(() => slice?.nMkt ?? '0');
   const [computed, setComputed] = useState(null);
   const [meta, setMeta] = useState(null);
@@ -83,16 +83,21 @@ export default function DsrToSchedulePage() {
   function applySetup() {
     const nD = Math.max(0, parseInt(nDsr, 10) || 0);
     const nM = Math.max(0, parseInt(nMkt, 10) || 0);
+    const hasExisting = dsrItems.some(hasContent) || marketItems.some(hasContent);
+    if (hasExisting && !window.confirm('This replaces all current DSR and market item rows with blank ones — anything already entered or imported will be lost. Continue?')) return;
     setDsrItems(Array.from({ length: nD }, (_, i) => ({ ...newDsrItem(), sno: String(i + 1) })));
     setMarketItems(Array.from({ length: nM }, (_, i) => ({ ...newMarketItem(), sno: String(nD + i + 1) })));
   }
 
-  // Merge imported rows (from OCR or pasted JSON) into the schedule (dropping
-  // any blank template rows), and adopt the factor / cost index if the source
-  // provided them.
+  // Apply imported rows (from OCR or pasted JSON) into the schedule: each
+  // category (DSR / market) the source actually produced rows for REPLACES
+  // that category outright — a category the source didn't touch is left as-is.
+  // Reimporting (e.g. a corrected JSON pasted a second time) must not pile the
+  // new rows on top of the old ones. The item-count boxes are kept in sync with
+  // what actually landed, so they never show a stale count.
   function handleImportApply({ dsrItems: incomingDsr = [], marketItems: incomingMkt = [], meta: sheet = {} }) {
-    if (incomingDsr.length) setDsrItems((prev) => [...prev.filter(hasContent), ...incomingDsr]);
-    if (incomingMkt.length) setMarketItems((prev) => [...prev.filter(hasContent), ...incomingMkt]);
+    if (incomingDsr.length) { setDsrItems(incomingDsr); setNDsr(String(incomingDsr.length)); }
+    if (incomingMkt.length) { setMarketItems(incomingMkt); setNMkt(String(incomingMkt.length)); }
     if (sheet.factor) setFactor(String(sheet.factor));
     if (sheet.costIndexPct != null && sheet.costIndexPct !== '') setCostIndexPct(String(sheet.costIndexPct));
     setError('');
@@ -171,15 +176,17 @@ export default function DsrToSchedulePage() {
                 <input type="number" min="0" value={nMkt} onChange={(e) => setNMkt(e.target.value)} /></label>
               <button className="secondary" onClick={applySetup}>Create rows</button>
               <div className="spacer" />
-              <label className="field sm"><span>Multiplying factor</span>
-                <input type="number" step="0.001" value={factor} onChange={(e) => setFactor(e.target.value)} /></label>
-              <label className="field sm"><span>Cost Index %</span>
-                <input type="number" step="0.01" value={costIndexPct} onChange={(e) => setCostIndexPct(e.target.value)} /></label>
+              <div className="setup-pair">
+                <label className="field sm"><span>Multiplying factor</span>
+                  <input type="number" step="0.001" value={factor} onChange={(e) => setFactor(e.target.value)} /></label>
+                <label className="field sm"><span>Cost Index %</span>
+                  <input type="number" step="0.01" value={costIndexPct} onChange={(e) => setCostIndexPct(e.target.value)} /></label>
+              </div>
             </div>
             <p className="note">Factor &amp; cost index apply to DSR items only. Market items are added at par. “Create rows” replaces current rows with blank ones; you can also add/remove individually below.</p>
           </section>
-          <DsrItemsSection items={dsrItems} setItems={setDsrItems} />
-          <MarketItemsSection items={marketItems} setItems={setMarketItems} startSno={startMktSno} />
+          <DsrItemsSection items={dsrItems} setItems={setDsrItems} onCleared={() => setNDsr('0')} />
+          <MarketItemsSection items={marketItems} setItems={setMarketItems} startSno={startMktSno} onCleared={() => setNMkt('0')} />
         </div>
         <div className="col-preview">
           <div className="preview-head">
