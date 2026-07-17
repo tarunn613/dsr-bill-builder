@@ -246,10 +246,34 @@ def extract_carriage_items(pdf_path):
 
 # Carriage codes on these pages are always sub-head 1.x (chapter 1).
 _carr2_code_re = re.compile(r'^1\.\d{1,2}(?:\.\d{1,3})*$')
+# FIX-8: a code-shaped token in the code column that is NOT a 1.x carriage code.
+# Real case: vol1 p.175 renders 1.2.16.5's code as '2.16.5' — the leading '1.' is
+# absent from the PDF text layer. Unrecognized, that row was folded into the
+# previous item (1.2.16.3), and because its rates land in the SAME column indices
+# they overwrote the real ones (200mm 954.71/140.09 -> 250mm 1589.60/233.26), and
+# its unit tokens appended too ('100 100 m m'). Used as a row BOUNDARY only: it
+# terminates the pending item and is not emitted — we do not invent a code the
+# text layer does not carry.
+_carr2_orphan_code_re = re.compile(r'^\d{1,2}(?:\.\d{1,3}){2,}$')
 _UNIT_VOCAB = {'cum', 'tonne', 'nos', 'no', 'no.', 'm', 'metre', 'meter', 'kg',
                'quintal', 'qtl', 'litre', 'liter', 'each', 'sqm', 'sq.m', 'dm',
                'cudm', 'km'}
 _MULT_TOKENS = {'10', '100', '1000', '10000'}
+
+
+def _next_tok_is_unit(body, wi):
+    """True if the next non-empty token after body[wi] is a unit word.
+
+    A scale token ('100') is part of the unit only in '100 m'. In a description
+    like '100 mm dia' the next token is 'mm' (not a unit word), so the '100'
+    must stay description — otherwise the unit came out as '100 100 m'.
+    """
+    for w in body[wi + 1:]:
+        t = w[4].strip()
+        if not t:
+            continue
+        return t.lower() in _UNIT_VOCAB
+    return False
 
 
 def _cluster_1d(values, gap=25.0):
@@ -326,9 +350,13 @@ def _parse_carriage_2col_page(page, page_idx):
         first = row[0]
         first_txt = first[4].strip()
 
-        if first[0] < 95 and _carr2_code_re.match(first_txt):
+        is_code = bool(first[0] < 95 and _carr2_code_re.match(first_txt))
+        is_orphan = bool(first[0] < 95 and not is_code
+                         and _carr2_orphan_code_re.match(first_txt))
+        if is_code or is_orphan:
             finalize(current)
-            current = {'code': first_txt, 'desc_toks': [], 'unit_toks': [], 'rates': {}}
+            current = ({'code': first_txt, 'desc_toks': [], 'unit_toks': [], 'rates': {}}
+                       if is_code else None)
             body = row[1:]
         else:
             body = row
@@ -336,7 +364,7 @@ def _parse_carriage_2col_page(page, page_idx):
         if current is None:
             continue
 
-        for w in body:
+        for wi, w in enumerate(body):
             x0, txt = w[0], w[4].strip()
             if not txt:
                 continue
@@ -347,7 +375,8 @@ def _parse_carriage_2col_page(page, page_idx):
                 current['rates'][ci] = txt
             elif x0 < min_rate_x:
                 low = txt.lower()
-                if low in _UNIT_VOCAB or (txt in _MULT_TOKENS):
+                if low in _UNIT_VOCAB or (txt in _MULT_TOKENS
+                                          and _next_tok_is_unit(body, wi)):
                     current['unit_toks'].append((x0, txt))
                 else:
                     current['desc_toks'].append((x0, txt, y))
@@ -577,6 +606,14 @@ def parse_standard_pages(pdf_path, skip_pages=None, allow_basic_codes=True,
     # variant line and steals the LAST variant's rate.
     dotted_code_pattern = re.compile(r'^(\d{1,2}(?:\.\d{1,3})+[A-Z]?)\s+(.*)')
     basic_code_pattern = re.compile(r'^(\d{4,5})\s+(.*)')
+    # FIX-8: a parenthesized variant code ('2.25(a)', vol1 p.189) is a real item
+    # boundary that dotted_code_pattern rejects — it needs \s+ after the digits
+    # and hits '('. Unrecognized, the previous item (2.25) kept accumulating,
+    # swallowed '... cum 196.00 2.25(a) Excavating ...' into its description, and
+    # the end-anchored rate regex then returned the LAST rate on the run — i.e.
+    # 2.25(a)'s 700.50 instead of 2.25's own 196.00. Boundary only: it terminates
+    # the pending item and is not emitted.
+    variant_code_pattern = re.compile(r'^(\d{1,2}(?:\.\d{1,3})+)\([a-z]\)\s+\S')
     rate_pattern = _RATE_PATTERN
 
     def finalize_pending(code, desc_lines, is_basic, source_page):
@@ -681,6 +718,21 @@ def parse_standard_pages(pdf_path, skip_pages=None, allow_basic_codes=True,
                     _ch = int(_dc.split('.')[0])
                     if not is_valid_dotted_code(_dc) or not (ch_lo <= _ch <= ch_hi):
                         match_dotted = None
+
+                # Parenthesized variant ('2.25(a)') — terminate the pending item
+                # so it cannot absorb this row's rate; do not emit the variant.
+                if not match_dotted:
+                    match_variant = variant_code_pattern.match(line)
+                    if match_variant:
+                        _vc = match_variant.group(1)
+                        _vch = int(_vc.split('.')[0])
+                        if is_valid_dotted_code(_vc) and ch_lo <= _vch <= ch_hi:
+                            if current_code and current_desc_lines:
+                                finalize_pending(current_code, current_desc_lines,
+                                                 current_is_basic, current_page)
+                            current_code = None
+                            current_desc_lines = []
+                            continue
 
                 match_basic = basic_code_pattern.match(line) if is_basic_page else None
 
