@@ -2,12 +2,15 @@
 //
 // A "session" is one tender/project. It holds the full working state of both
 // pages (DSR -> Schedule and Schedule -> Bill), plus an on-disk archive of every
-// file the user exported or imported, so no work is ever lost.
+// file the user exported, so no work is ever lost.
 //
 // Layout (one folder per session):
 //   <base>/<id>/session.json      metadata + saved page state
 //   <base>/<id>/exports/*         archived .xlsx / .pdf the user exported
-//   <base>/<id>/imports/*         archived schedule files the user imported
+//
+// An older session (or an imported .dbill made before this) may still carry an
+// imports/ subfolder on disk from a since-removed "upload a schedule" feature —
+// importSessionPackage() preserves it verbatim rather than discarding it.
 //
 // The base folder is process.env.SESSIONS_DIR when set (the desktop app points
 // this at the OS user-data dir), otherwise backend/data/sessions for plain dev.
@@ -96,7 +99,6 @@ function summarize(s) {
     scheduleItems: countItems(s.state?.schedule),
     billItems: Array.isArray(s.state?.bill?.rows) ? s.state.bill.rows.length : 0,
     exports: (s.exports || []).length,
-    imports: (s.imports || []).length,
   };
 }
 
@@ -125,7 +127,6 @@ export function createSession(name) {
   const id = randomUUID();
   const dir = sessionDir(id);
   mkdirSync(join(dir, 'exports'), { recursive: true });
-  mkdirSync(join(dir, 'imports'), { recursive: true });
   const now = Date.now();
   const session = {
     id,
@@ -136,7 +137,6 @@ export function createSession(name) {
     updatedAt: now,
     state: { schedule: null, bill: null },
     exports: [],
-    imports: [],
   };
   writeSession(session);
   return session;
@@ -197,30 +197,6 @@ export function getExportFile(id, exportId) {
   const path = join(sessionDir(id), 'exports', rec.storedAs);
   if (!existsSync(path)) return null;
   return { path, filename: rec.filename, kind: rec.kind };
-}
-
-// Archive an imported schedule file into the session and record it.
-export function recordImport(id, { filename, buffer, rows }) {
-  const s = readSession(id);
-  if (!s) return null;
-  const importId = randomUUID();
-  const nice = safeFile(filename, 'import.xlsx');
-  const storedAs = `${importId}__${nice}`;
-  const dir = join(sessionDir(id), 'imports');
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  if (buffer) writeFileSync(join(dir, storedAs), buffer);
-  const rec = {
-    id: importId,
-    filename: nice,
-    storedAs: buffer ? storedAs : null,
-    rows: rows || 0,
-    bytes: buffer ? buffer.length : 0,
-    at: Date.now(),
-  };
-  s.imports = s.imports || [];
-  s.imports.unshift(rec);
-  writeSession(s);
-  return rec;
 }
 
 // Zip the whole session folder into a single portable package.

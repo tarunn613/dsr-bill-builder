@@ -276,15 +276,15 @@ function BillHelp() {
     <>
       <p className="help-lede">
         Turns a Schedule into a full <b>RA Bill</b> — four linked sheets that update
-        each other live. Arrives here automatically via "Send to Bill →", or upload any
-        Schedule Excel with the <b>Upload schedule</b> button.
+        each other live. Arrives here automatically via "Send to Bill →" from the
+        DSR → Schedule page.
       </p>
 
       <MiniGrid
         items={[
           {
             icon: '📋', title: 'Schedule', desc: 'The priced item list — same as the Schedule page.',
-            bullets: ['Arrives from DSR → Schedule, or an uploaded workbook', 'Editing a rate here flows into RE and Abstract'],
+            bullets: ['Arrives from DSR → Schedule via "Send to Bill →"', 'Editing a rate here flows into RE and Abstract'],
           },
           {
             icon: '📐', title: 'RE — Measurements', desc: 'Record actual measurements against each item.',

@@ -40,8 +40,7 @@ schedule-builder/
 │       ├── core.js            # schedule calc chain + Indian number-to-words
 │       ├── excel.js / pdf.js  # schedule exports
 │       ├── bill-core.js       # bill calc chain (measured + scheduled)
-│       ├── bill-excel.js      # RA Bill workbook (3 cross-linked sheets, live formulas)
-│       ├── bill-parse.js      # parse an uploaded schedule workbook
+│       ├── bill-excel.js      # RA Bill workbook (cross-linked sheets, live formulas)
 │       ├── sessions.js        # file-based session store (+ .dbill package/import)
 │       └── server.js          # REST API; also serves the built frontend
 └── frontend/                 # React + Vite (:5173 in dev)

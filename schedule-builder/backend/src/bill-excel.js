@@ -113,8 +113,8 @@ function buildBillWorkbook(payload = {}) {
   };
 
   // S.No is effectiveSno() (see bill-core.js) — the row's own explicit serial number
-  // if it has one (from a JSON/OCR import or an uploaded schedule's S.No column),
-  // else its position in the schedule (i + 1) as a fallback — NOT a running counter
+  // if it has one (from a JSON/OCR import), else its position in the schedule
+  // (i + 1) as a fallback — NOT a running counter
   // over the printed rows. The sheet groups MKT/Recovery below the corrected-DSR
   // subtotal, so a running counter would renumber them and they'd no longer match
   // the BOQ / the app's Schedule tab. Either way this can leave a gap in the main
@@ -267,6 +267,8 @@ function buildBillWorkbook(payload = {}) {
   const cementManualRows = payload.cementManualRows || [];
   const cementQtyOverrides = payload.cementQtyOverrides || {};
   const cementDescOverrides = payload.cementDescOverrides || {};
+  // Resolved cement-appendix description per row index (full_desc / leaf_desc).
+  const cementDescs = payload.cementDescs || {};
 
   const isManualMode = cementMode === 'manual';
   const cemItems = isManualMode ? [] : ordered.filter((i) => num(cementMap[i]) > 0);
@@ -339,15 +341,25 @@ function buildBillWorkbook(payload = {}) {
         bc.value = { formula: `IF(Schedule!B${sr}="","",Schedule!B${sr})` };
         bc.border = BORDER; bc.alignment = { horizontal: 'left', vertical: 'top' }; bc.font = { bold: true, color: { argb: 'FF1f4e23' } };
         
-        // C: Description (override or schedule link)
+        // C: Description — from the CEMENT database (DSR Vol-2 appendix), NOT the
+        // Schedule. The book describes the same item twice in different words, and
+        // this sheet must carry the appendix's own wording: full_desc when "Keep
+        // full description" is ticked, else leaf_desc (resolved frontend-side in
+        // cementDesc.js so the tab and this sheet always agree). A manual override
+        // wins; a row with no appendix text falls back to the live Schedule link
+        // rather than exporting a blank cell.
         const descOver = cementDescOverrides[i];
-        if (descOver !== undefined && descOver !== '') {
-          cem.getCell(`C${cy}`).value = descOver;
+        const cemDesc = cementDescs[i];
+        let cDescText = null;
+        if (descOver !== undefined && descOver !== '') cDescText = descOver;
+        else if (cemDesc) cDescText = cemDesc;
+        if (cDescText != null) {
+          cem.getCell(`C${cy}`).value = cDescText;
         } else {
           cem.getCell(`C${cy}`).value = { formula: `IF(Schedule!C${sr}="","",Schedule!C${sr})` };
         }
         cem.getCell(`C${cy}`).alignment = { wrapText: true, vertical: 'top' };
-        cem.getRow(cy).height = descHeight(descOver || rows[i].description, 46);
+        cem.getRow(cy).height = descHeight(cDescText || rows[i].description, 46);
 
         // D: Qty (override or Abstract link)
         const dc = cem.getCell(`D${cy}`);

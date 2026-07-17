@@ -52,7 +52,7 @@ export default function BillScheduleTab({ rows, setRows, computed, snoById = {} 
           {rows.map((it) => (
             <Row key={it.id} sno={snoById[it.id]} item={it} patch={(c) => patchAt(it.id, c)} remove={() => removeAt(it.id)} />
           ))}
-          {rows.length === 0 && <tr><td colSpan={9} className="empty">No items — upload a schedule or send one from the DSR → Schedule page.</td></tr>}
+          {rows.length === 0 && <tr><td colSpan={9} className="empty">No items — send a schedule from the DSR → Schedule page.</td></tr>}
         </tbody>
       </table>
       <button className="add-btn" onClick={add}>+ Add item</button>

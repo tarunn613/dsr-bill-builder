@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { searchCementByDesc, searchCementByCode, searchCementCombined } from '../../api.js';
+import { cementDescFor, keepFullFor } from '../../cementDesc.js';
 
 // ---- formatting helpers ----
 const n = (v) => { const x = Number(v); return isFinite(x) ? x : 0; };
@@ -13,10 +14,15 @@ const hasRowContent = (r) =>
   ['ref', 'description', 'qty', 'rate'].some((k) => String(r[k] ?? '').trim() !== '');
 
 // ---- match type badge ----
-function MatchBadge({ matchType }) {
+function MatchBadge({ matchType, matchedCode }) {
   if (!matchType) return null;
   const cfg = {
     exact:  { label: 'DSR DB', bg: '#dcfce7', color: '#15803d', title: 'Auto-filled from DSR 2023 Vol-2 coefficient table (exact code match)' },
+    // The appendix prints one coefficient against the parent code; the bill cites a
+    // sub-code. Inherited, not exact — flagged so it is never mistaken for one.
+    base:   { label: 'Base code', bg: '#e0e7ff', color: '#4338ca', title: matchedCode
+                ? `No coefficient printed for this exact code — inherited from its parent ${matchedCode} in the DSR Vol-2 appendix. Verify it applies to this variant.`
+                : 'Inherited from the parent code in the DSR Vol-2 appendix.' },
     desc:   { label: 'Desc match', bg: '#fef9c3', color: '#a16207', title: 'Filled via description/mix-spec fallback search — verify before use' },
     code:   { label: 'Code match', bg: '#dbeafe', color: '#1d4ed8', title: 'Matched via DSR ref code search in cement DB' },
     manual: { label: 'Manual', bg: '#f3f4f6', color: '#6b7280', title: 'Entered manually by user' },
@@ -185,6 +191,10 @@ export default function BillCementTab({
   setCementQtyOverrides,
   cementDescOverrides,
   setCementDescOverrides,
+  cementFullDesc = {},
+  setCementFullDesc,
+  cementFullDescAll = false,
+  setCementFullDescAll,
   cementFetchExtraRows,
   setCementFetchExtraRows,
 }) {
@@ -209,6 +219,9 @@ export default function BillCementTab({
       [rowId]: {
         code: result.code,
         description: result.description,
+        // Both kept so "Keep full description" toggles on searched rows too.
+        leaf_desc: result.leaf_desc || '',
+        full_desc: result.full_desc || result.description || '',
         unit: result.unit,
         source_page: result.source_page,
         matchType: result.matchType || 'desc',
@@ -243,9 +256,17 @@ export default function BillCementTab({
       const qty = hasQtyOverride ? n(cementQtyOverrides[r.id]) : baseQty;
       if (hasQtyOverride) qtySource = 'overridden';
 
-      // Description logic with overrides
+      // Description — from the CEMENT database, never the Schedule's rate-book
+      // wording (they are different text for the same item; see cementDesc.js).
+      // Ticked -> full_desc, unticked -> leaf_desc. A manual override still wins.
+      // Rows with no cement-DB match (e.g. a hand-typed coeff) have no appendix
+      // text at all, so they fall back to the schedule wording rather than blank.
+      const matchInfoRow = cementMatchInfo?.[r.id] || null;
+      const keepFull = keepFullFor(r.id, cementFullDesc, cementFullDescAll);
+      const cemDesc = cementDescFor(matchInfoRow, keepFull);
+      const hasCemDesc = !!cemDesc;
       const hasDescOverride = cementDescOverrides[r.id] !== undefined && cementDescOverrides[r.id] !== '';
-      const desc = hasDescOverride ? cementDescOverrides[r.id] : r.description;
+      const desc = hasDescOverride ? cementDescOverrides[r.id] : (cemDesc || r.description);
 
       const coeff = cementById[r.id];
       const coeffNum = coeff !== undefined && coeff !== '' ? n(coeff) : null;
@@ -254,7 +275,7 @@ export default function BillCementTab({
       // instead of a blank cell.
       const cq = coeffNum != null && coeffNum > 0 && qty != null ? Math.round(coeffNum * qty * 100) / 100 : null;
 
-      const matchInfo = cementMatchInfo?.[r.id] || null;
+      const matchInfo = matchInfoRow;
       const matchType = matchInfo?.matchType || (coeff !== undefined && coeff !== '' ? 'manual' : null);
 
       // Only include this row if it has cement DB data (exact match) or user has set a coeff
@@ -268,7 +289,7 @@ export default function BillCementTab({
         // The list is filtered to cement-consuming items, so it runs sparse
         // (9, 10, 11, 17, 20 ...) — that is correct and matches the hand-made bill.
         id: r.id, sno: snoById[r.id], ref: r.ref || '', desc, originalDesc: r.description, baseQty, hasQtyOverride,
-        hasDescOverride, qty, qtySource, unit: it.unit || r.unit || '', coeff, coeffNum, cq, matchInfo, matchType
+        hasDescOverride, keepFull, hasCemDesc, qty, qtySource, unit: it.unit || r.unit || '', coeff, coeffNum, cq, matchInfo, matchType
       };
     })
     .filter(Boolean); // remove nulls (items with no cement relevance)
@@ -329,13 +350,9 @@ export default function BillCementTab({
     <div className="bill-cement">
       {/* Mode Toggle Toolbar */}
       <div className="cem-toolbar">
-        <label className="field sm" style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontWeight: 'bold', color: '#374151' }}>Cement Sourcing:</span>
-          <select
-            value={cementMode}
-            onChange={(e) => setCementMode(e.target.value)}
-            style={{ width: 180, fontWeight: 'bold' }}
-          >
+        <label className="field cem-sourcing">
+          <span>Cement Sourcing:</span>
+          <select value={cementMode} onChange={(e) => setCementMode(e.target.value)}>
             <option value="fetch">Fetch from Schedule</option>
             <option value="manual">Everything Manual</option>
           </select>
@@ -346,6 +363,16 @@ export default function BillCementTab({
         {cementMode === 'fetch' && (
           <button className="secondary sm" onClick={addFetchExtraRow}>+ Add row</button>
         )}
+        {cementMode === 'fetch' && (
+          <label className="cem-fulldesc-all" title="Forces every row to show the cement database's full_desc (group heading — leaf). Untick to let each row decide.">
+            <input
+              type="checkbox"
+              checked={!!cementFullDescAll}
+              onChange={(e) => setCementFullDescAll(e.target.checked)}
+            />
+            Keep full description <span className="muted">(all items)</span>
+          </label>
+        )}
       </div>
 
       {/* Header note */}
@@ -353,8 +380,10 @@ export default function BillCementTab({
         <div>
           {cementMode === 'fetch' ? (
             <span>
-              <strong>Fetch from Schedule Mode:</strong> Item quantities and descriptions import from the schedule automatically.
-              You can override quantities, edit descriptions, and search the DSR DB.
+              <strong>Fetch from Schedule Mode:</strong> Quantities come from the RE measurements; S.No and DSR Ref mirror the Schedule.
+              Descriptions come from the <strong>cement database</strong> (DSR Vol-2 appendix), not the schedule&apos;s rate-book wording —
+              tick <em>Keep full description</em> for the group heading + item, untick for the item line only.
+              You can still override quantities, edit descriptions, and search the DSR DB.
             </span>
           ) : (
             <span>
@@ -366,6 +395,7 @@ export default function BillCementTab({
         {cementMode === 'fetch' && (
           <div className="cem-legend">
             <MatchBadge matchType="exact" /> auto-filled (exact code)&nbsp;&nbsp;
+            <MatchBadge matchType="base" /> inherited from parent code&nbsp;&nbsp;
             <MatchBadge matchType="code" /> code search match&nbsp;&nbsp;
             <MatchBadge matchType="desc" /> description match&nbsp;&nbsp;
             <MatchBadge matchType="manual" /> manual entry
@@ -423,6 +453,33 @@ export default function BillCementTab({
                             Reset Description
                           </button>
                         )}
+                        <label
+                          className={`cem-fulldesc${v.hasCemDesc && !v.hasDescOverride ? '' : ' disabled'}`}
+                          title={
+                            !v.hasCemDesc
+                              ? 'No cement-appendix text for this code — showing the schedule wording.'
+                              : v.hasDescOverride
+                                ? 'This row has an edited description. Reset it to use the cement database text.'
+                                : cementFullDescAll
+                                  ? 'Forced on by "Keep full description for all items".'
+                                  : 'Ticked: full_desc (group heading — leaf). Unticked: leaf_desc only.'
+                          }
+                        >
+                          <input
+                            type="checkbox"
+                            checked={v.keepFull}
+                            disabled={!v.hasCemDesc || v.hasDescOverride || cementFullDescAll}
+                            onChange={(e) => {
+                              const on = e.target.checked;
+                              setCementFullDesc((p) => {
+                                const nx = { ...p };
+                                if (on) nx[v.id] = true; else delete nx[v.id];
+                                return nx;
+                              });
+                            }}
+                          />
+                          Keep full description
+                        </label>
                         {v.matchInfo?.source_page && (
                           <div className="cem-source-page-inline">DSR Vol-2 p.{v.matchInfo.source_page}</div>
                         )}
@@ -466,7 +523,7 @@ export default function BillCementTab({
                         )}
                       </td>
                       <td className="cem-match-cell" style={{ verticalAlign: 'middle' }}>
-                        {v.matchType && <MatchBadge matchType={v.matchType} />}
+                        {v.matchType && <MatchBadge matchType={v.matchType} matchedCode={v.matchInfo?.matchedCode} />}
                         {!v.matchType && (
                           <button
                             className="cem-search-btn"

@@ -108,20 +108,6 @@ function fileToBase64(file) {
   });
 }
 
-export async function parseScheduleFile(file, sessionId) {
-  const b64 = await fileToBase64(file);
-  const res = await fetch('/api/bill/parse', {
-    method: 'POST',
-    headers: JSON_HEADERS,
-    body: JSON.stringify({ fileBase64: b64, filename: file.name, sessionId }),
-  });
-  if (!res.ok) {
-    const e = await res.json().catch(() => ({}));
-    throw new Error(e.error || 'could not parse workbook');
-  }
-  return res.json();
-}
-
 // ---- Excel -> B&W A4 PDF (zip of per-sheet PDFs) --------------------------
 export async function listXlsxSheets(file) {
   const b64 = await fileToBase64(file);

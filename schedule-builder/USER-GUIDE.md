@@ -85,8 +85,8 @@ that tender, with a **Download** button to get any of them again later.
 
 The bill has three linked sheets. Change one and the others update automatically.
 
-1. **Schedule tab** — the list of items and rates (arrives from the schedule page,
-   or upload an Excel schedule with **Upload schedule**).
+1. **Schedule tab** — the list of items and rates (arrives from the schedule page
+   via **Send to Bill →**).
 2. **RE — Measurements tab** — enter your measurements for each item
    (Nos × Length × Width × Height, with a factor). A **negative "Nos"** makes a
    *"less"* deduction row. The quantity totals up automatically.

@@ -223,29 +223,6 @@ export default function SessionsPage() {
                     </div>
                   )}
                 </section>
-
-                <section>
-                  <h2 className="section-h">Imported files <span className="section-count">({(session.imports || []).length})</span></h2>
-                  {(session.imports || []).length === 0 ? (
-                    <div className="files-empty">No imports. Uploading a schedule to the Bill page keeps a copy here.</div>
-                  ) : (
-                    <div className="files-card">
-                      <table className="files-table">
-                        <thead><tr><th>File</th><th>Rows</th><th>Size</th><th>When</th></tr></thead>
-                        <tbody>
-                          {session.imports.map((im) => (
-                            <tr key={im.id}>
-                              <td className="fn">{im.filename}</td>
-                              <td>{im.rows}</td>
-                              <td>{fmtBytes(im.bytes)}</td>
-                              <td>{fmtDate(im.at)}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  )}
-                </section>
               </>
             )}
           </div>

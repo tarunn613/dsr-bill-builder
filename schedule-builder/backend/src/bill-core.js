@@ -31,9 +31,9 @@ function isMain(category) {
 }
 
 // The canonical Schedule serial number for row `it` at position `i`. Trusts an
-// explicit incoming sno (carried in from the Schedule page / a JSON import / an
-// uploaded workbook's own S.No column) verbatim — never re-sorted or renumbered,
-// because the AE/JE cross-check each bill line against their BOQ by this number
+// explicit incoming sno (carried in from the Schedule page / a JSON import)
+// verbatim — never re-sorted or renumbered, because the AE/JE cross-check each
+// bill line against their BOQ by this number
 // before signing. Only falls back to the item's 1-based position when a row
 // genuinely has none (rows added by hand directly on the Bill page, or sessions
 // saved before this field existed) — shared by computeBill() and the Excel export

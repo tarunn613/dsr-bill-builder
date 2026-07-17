@@ -9,7 +9,6 @@ import { buildScheduleWorkbook } from './excel.js';
 import { buildSchedulePdf } from './pdf.js';
 import { computeBill } from './bill-core.js';
 import { buildBillWorkbook } from './bill-excel.js';
-import { parseScheduleBuffer } from './bill-parse.js';
 import { renderWorkbookToZip, listSheetNames } from './xlsx-pdf.js';
 import { coeffsFor, searchByDesc, searchByCode, searchCombined } from './cement.js';
 import { parseDocument, matchCode, visionExtract, visionConfigured } from './ocr.js';
@@ -18,7 +17,7 @@ import { parseJsonImport, matchJsonRow } from './json-import.js';
 import { parseTenderImport } from './tender-import.js';
 import {
   listSessions, createSession, getSession, updateSession, deleteSession,
-  archiveExport, getExportFile, recordImport, packageSession, importSessionPackage,
+  archiveExport, getExportFile, packageSession, importSessionPackage,
   sessionsBaseDir,
 } from './sessions.js';
 
@@ -206,28 +205,6 @@ app.post('/api/bill/xlsx', async (req, res) => {
   } catch (e) {
     console.error(e);
     res.status(500).json({ error: String(e.message || e) });
-  }
-});
-
-// parse an uploaded schedule workbook (base64) -> normalized rows + meta
-app.post('/api/bill/parse', async (req, res) => {
-  try {
-    const b64 = (req.body && req.body.fileBase64) || '';
-    if (!b64) return res.status(400).json({ error: 'no file' });
-    const buffer = Buffer.from(b64.replace(/^data:.*;base64,/, ''), 'base64');
-    const out = await parseScheduleBuffer(buffer);
-    // archive the uploaded file into the session, if one is active
-    if (req.body.sessionId) {
-      try {
-        recordImport(req.body.sessionId, {
-          filename: req.body.filename || 'schedule.xlsx', buffer, rows: (out.rows || []).length,
-        });
-      } catch (e) { console.error('recordImport failed:', e.message); }
-    }
-    res.json(out);
-  } catch (e) {
-    console.error(e);
-    res.status(400).json({ error: 'could not parse workbook: ' + String(e.message || e) });
   }
 });
 

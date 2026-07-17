@@ -5,8 +5,9 @@ import BillAbstractTab from '../components/bill/BillAbstractTab.jsx';
 import BillCementTab from '../components/bill/BillCementTab.jsx';
 import TenderImportModal from '../components/TenderImportModal.jsx';
 import SaveAsDialog from '../components/SaveAsDialog.jsx';
-import { computeBill, downloadBill, saveBlob, archiveExport, parseScheduleFile, lookupCementCoeffs } from '../api.js';
+import { computeBill, downloadBill, saveBlob, archiveExport, lookupCementCoeffs } from '../api.js';
 import { takeBillHandoff, clearBillHandoff } from '../store.js';
+import { cementDescFor, keepFullFor } from '../cementDesc.js';
 import { useSession } from '../SessionContext.jsx';
 
 const fmt = (r) => (r === '' || r == null ? '' : Number(r).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
@@ -51,6 +52,10 @@ export default function ScheduleToBillPage() {
   const [cementQtyOverrides, setCementQtyOverrides] = useState(() => savedBill?.cementQtyOverrides || {});
   const [cementDescOverrides, setCementDescOverrides] = useState(() => savedBill?.cementDescOverrides || {});
   const [cementFetchExtraRows, setCementFetchExtraRows] = useState(() => savedBill?.cementFetchExtraRows || []);
+  // "Keep full description" — per row (id -> bool) + a master that forces it on
+  // every row. Ticked shows cement_coeff.full_desc, unticked shows leaf_desc only.
+  const [cementFullDesc, setCementFullDesc] = useState(() => savedBill?.cementFullDesc || {});
+  const [cementFullDescAll, setCementFullDescAll] = useState(() => savedBill?.cementFullDescAll ?? false);
   const [tab, setTab] = useState('schedule');
   const [computed, setComputed] = useState(null);
   const [busy, setBusy] = useState(false);
@@ -80,12 +85,14 @@ export default function ScheduleToBillPage() {
     () => ({
       meta, factor, costIndexPct, quotedPct, quotedType, rows, measById,
       cementById, cementMatchInfo, cementMode, cementManualRows,
-      cementQtyOverrides, cementDescOverrides, cementFetchExtraRows
+      cementQtyOverrides, cementDescOverrides, cementFetchExtraRows,
+      cementFullDesc, cementFullDescAll
     }),
     [
       meta, factor, costIndexPct, quotedPct, quotedType, rows, measById,
       cementById, cementMatchInfo, cementMode, cementManualRows,
-      cementQtyOverrides, cementDescOverrides, cementFetchExtraRows
+      cementQtyOverrides, cementDescOverrides, cementFetchExtraRows,
+      cementFullDesc, cementFullDescAll
     ],
   );
   // baseline = what's on disk. With a handoff we set it to the (old) saved slice
@@ -110,8 +117,8 @@ export default function ScheduleToBillPage() {
   // ---- canonical Schedule serial numbers ----
   // One definition, used by every tab: an item's S.No is its OWN explicit serial
   // number — carried in from the schedule builder (typed there, or from a JSON/OCR
-  // import), or from an uploaded workbook's own S.No column — shown verbatim, never
-  // re-sorted or renumbered. Only rows with no explicit number at all (added by hand
+  // import) — shown verbatim, never re-sorted or renumbered. Only rows with no
+  // explicit number at all (added by hand
   // directly on this page, or sessions saved before this field existed) fall back to
   // their 1-based position among the content-bearing rows. RE / Abstract / Cement all
   // display THIS number (never their own 1..N), because the AE/JE check each line
@@ -136,6 +143,11 @@ export default function ScheduleToBillPage() {
     const cement = {};
     const cementQtyOverridesPayload = {};
     const cementDescOverridesPayload = {};
+    // Resolved Cement-sheet description per row, from the CEMENT database only
+    // (full_desc when "Keep full description" is ticked, else leaf_desc). Resolved
+    // here rather than in the exporter so the tab and the workbook use the exact
+    // same string — see cementDesc.js.
+    const cementDescsPayload = {};
 
     clean.forEach((r, i) => {
       const list = (measById[r.id] || []).filter((m) => String(m.n ?? '').trim() !== '');
@@ -155,6 +167,12 @@ export default function ScheduleToBillPage() {
       if (doOver !== undefined && doOver !== '') {
         cementDescOverridesPayload[i] = doOver;
       }
+
+      const cd = cementDescFor(
+        cementMatchInfo?.[r.id],
+        keepFullFor(r.id, cementFullDesc, cementFullDescAll),
+      );
+      if (cd) cementDescsPayload[i] = cd;
     });
 
     return {
@@ -168,10 +186,15 @@ export default function ScheduleToBillPage() {
       cementManualRows: cementManualRows.filter(r => String(r.ref || r.description || r.qty || r.coeff).trim() !== ''),
       cementQtyOverrides: cementQtyOverridesPayload,
       cementDescOverrides: cementDescOverridesPayload,
+      cementDescs: cementDescsPayload,
+      cementFetchExtraRows: (cementFetchExtraRows || []).filter(
+        (r) => String(r.ref || r.description || r.qty || r.coeff).trim() !== ''
+      ),
     };
   }, [
     meta, factor, costIndexPct, quotedPct, quotedType, rows, measById, cementById,
-    cementMode, cementManualRows, cementQtyOverrides, cementDescOverrides
+    cementMode, cementManualRows, cementQtyOverrides, cementDescOverrides,
+    cementMatchInfo, cementFullDesc, cementFullDescAll, cementFetchExtraRows
   ]);
 
   // auto-fill cement coefficients from the DSR code (only rows the user hasn't set yet)
@@ -179,7 +202,16 @@ export default function ScheduleToBillPage() {
   useEffect(() => {
     const clean = rows.filter(hasRowContent);
     const codes = [...new Set(
-      clean.map((r) => (r.ref || '').trim()).filter((c) => c && !cementTried.current.has(c))
+      [
+        ...clean.map((r) => (r.ref || '').trim()),
+        // Also re-fetch codes a saved session already matched but that predate
+        // leaf_desc, including ones the user picked by search (whose code can
+        // differ from the row's ref) — they need backfilling, see below.
+        ...clean
+          .map((r) => cementMatchInfo?.[r.id])
+          .filter((mi) => mi && mi.leaf_desc === undefined && mi.code)
+          .map((mi) => String(mi.code).trim()),
+      ].filter((c) => c && !cementTried.current.has(c))
     )];
     if (!codes.length) return;
     codes.forEach((c) => cementTried.current.add(c));
@@ -199,15 +231,38 @@ export default function ScheduleToBillPage() {
       setCementMatchInfo((prev) => {
         const next = { ...prev }; let changed = false;
         for (const r of clean) {
-          const code = (r.ref || '').trim();
-          if (code && map[code] && !prev[r.id]) {
+          const ref = (r.ref || '').trim();
+          const cur = prev[r.id];
+          // Honour a code the user picked by search — it can differ from the ref.
+          const code = (cur?.code || ref || '').trim();
+          const hit = code && map[code];
+          if (!hit) continue;
+          const descFields = {
+            description: hit.full_desc || hit.description || '',
+            // Both kept so "Keep full description" can toggle between them.
+            leaf_desc: hit.leaf_desc || '',
+            full_desc: hit.full_desc || hit.description || '',
+          };
+          if (!cur) {
             next[r.id] = {
               code,
-              description: map[code].full_desc || map[code].description || '',
-              unit: map[code].unit || '',
-              source_page: map[code].source_page || null,
-              matchType: 'exact',
+              ...descFields,
+              unit: hit.unit || '',
+              source_page: hit.source_page || null,
+              // 'exact' or 'base' — a base-code hit inherits the parent's coefficient
+              // and must stay visibly distinct from an exact match.
+              matchType: hit.matchType || 'exact',
+              matchedCode: hit.matchedCode || code,
             };
+            changed = true;
+          } else if (cur.leaf_desc === undefined) {
+            // BACKFILL. Sessions saved before "Keep full description" stored only
+            // `description` (= full_desc) and no leaf_desc. Without leaf_desc the
+            // unticked state has nothing to show and falls back to the full text,
+            // so the tick silently appears to do nothing on every existing tender.
+            // Only the description fields are refreshed — the user's own code,
+            // matchType and coefficient are left exactly as saved.
+            next[r.id] = { ...cur, ...descFields };
             changed = true;
           }
         }
@@ -224,21 +279,6 @@ export default function ScheduleToBillPage() {
     }, 300);
     return () => clearTimeout(timer.current);
   }, [payload]);
-
-  async function onUpload(e) {
-    const f = e.target.files?.[0];
-    if (!f) return;
-    setStatus('Reading ' + f.name + '…'); setStatusKind('');
-    try {
-      const out = await parseScheduleFile(f, activeId);
-      if (!out.rows?.length) throw new Error('No items found in the workbook.');
-      setRows(out.rows.map(toRow));
-      if (out.meta) setMeta((m) => ({ ...m, ...out.meta }));
-      await reloadActive(); // reflect the archived import in the session
-      setStatus(`Parsed ${out.rows.length} items from ${f.name}.`); setStatusKind('ok');
-    } catch (err) { setStatus(err.message); setStatusKind('err'); }
-    e.target.value = '';
-  }
 
   async function onExport() {
     setBusy(true); setStatus('');
@@ -260,9 +300,6 @@ export default function ScheduleToBillPage() {
         </div>
         <div className="topbar-actions">
           <button className="ghost" onClick={() => setTenderImport(true)}>Import tender details (JSON)</button>
-          <label className="ghost upload-btn">Upload schedule
-            <input type="file" accept=".xlsx,.xlsm,.csv,.tsv,.txt" onChange={onUpload} hidden />
-          </label>
           <button className="primary" disabled={busy || !rows.length} onClick={onExport}>{busy ? 'Exporting…' : '⬇ Export Bill (.xlsx)'}</button>
         </div>
       </div>
@@ -336,6 +373,10 @@ export default function ScheduleToBillPage() {
               setCementQtyOverrides={setCementQtyOverrides}
               cementDescOverrides={cementDescOverrides}
               setCementDescOverrides={setCementDescOverrides}
+              cementFullDesc={cementFullDesc}
+              setCementFullDesc={setCementFullDesc}
+              cementFullDescAll={cementFullDescAll}
+              setCementFullDescAll={setCementFullDescAll}
               cementFetchExtraRows={cementFetchExtraRows}
               setCementFetchExtraRows={setCementFetchExtraRows}
             />

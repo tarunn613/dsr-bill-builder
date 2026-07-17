@@ -1,6 +1,6 @@
 {
   "name": "dsr-bill-builder",
-  "version": "1.6.3",
+  "version": "1.7.0",
   "private": true,
   "type": "module",
   "description": "DSR Bill Builder — build a DSR Schedule of Work and turn it into an RA Bill (local desktop/web app for government tendering).",

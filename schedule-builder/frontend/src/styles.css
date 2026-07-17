@@ -204,9 +204,8 @@ input.rate-deviates { border-color: #f59e0b; background: #fffbeb; }
 button.primary { background: var(--green); color: #fff; border: 0; padding: 8px 15px; border-radius: 6px; font-weight: 600; cursor: pointer; }
 button.primary:hover { background: var(--green-2); }
 button.primary:disabled { opacity: .5; cursor: default; }
-button.ghost, .upload-btn { background: #fff; color: var(--green); border: 1px solid var(--green-2); padding: 8px 13px; border-radius: 6px; font-weight: 600; cursor: pointer; }
-button.ghost:hover, .upload-btn:hover { background: #eef6ee; }
-.upload-btn { display: inline-flex; align-items: center; }
+button.ghost { background: #fff; color: var(--green); border: 1px solid var(--green-2); padding: 8px 13px; border-radius: 6px; font-weight: 600; cursor: pointer; }
+button.ghost:hover { background: #eef6ee; }
 
 /* ===== home ===== */
 .home { max-width: 980px; margin: 0 auto; padding: 40px 24px; }
@@ -348,8 +347,16 @@ button.ghost.danger:hover { background: #fde8e8; }
 
 .cem-toolbar {
   display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; flex-wrap: wrap;
   padding: 10px 14px; background: #fff; border: 1px solid var(--line); border-radius: 8px;
 }
+/* The mode picker sizes to its own content. It must NOT use `.field.sm`, which caps
+   the label at max-width:160px while the select inside it is 180px — the select
+   overflowed the label and (with no toolbar gap) the "+ Add row" button rendered
+   right on top of it. */
+.cem-sourcing { flex-direction: row; align-items: center; gap: 8px; flex: none; max-width: none; }
+.cem-sourcing > span { font-size: 12px; font-weight: 700; color: #374151; white-space: nowrap; }
+.cem-sourcing select { width: 180px; flex: none; font-weight: 700; }
 
 .cem-header-note {
   display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;
@@ -404,6 +411,27 @@ button.ghost.danger:hover { background: #fde8e8; }
 .cem-match-desc { font-size: 10.5px; color: #6b7280; margin-top: 3px; line-height: 1.3; }
 .cem-source-page { font-size: 10px; color: #9ca3af; font-weight: 600; }
 .cem-source-page-inline { font-size: 10px; color: #9ca3af; margin-top: 2px; }
+
+/* "Keep full description" — per-row tick (in the description cell) + the master
+   tick in the toolbar. Ticked = cement_coeff.full_desc, unticked = leaf_desc. */
+.cem-fulldesc {
+  display: flex; align-items: center; gap: 5px; margin-top: 3px;
+  font-size: 11px; color: var(--muted); cursor: pointer; user-select: none;
+}
+/* width/flex-none are load-bearing: the global `input {width:100%}` rule above
+   stretches a bare checkbox to the full cell (~224px) and shoves the label text
+   to the far right. Checkboxes must opt out of it explicitly. */
+.cem-fulldesc input { width: auto; flex: none; padding: 0; cursor: pointer; margin: 0; }
+.cem-fulldesc.disabled { opacity: 0.45; cursor: not-allowed; }
+.cem-fulldesc.disabled input { cursor: not-allowed; }
+.cem-fulldesc-all {
+  display: flex; align-items: center; gap: 6px; margin-left: auto;
+  font-size: 12px; font-weight: 600; color: var(--ink);
+  padding: 5px 10px; border: 1px solid var(--line); border-radius: 8px;
+  background: #fbfdfb; cursor: pointer; user-select: none; white-space: nowrap;
+}
+.cem-fulldesc-all input { width: auto; flex: none; padding: 0; cursor: pointer; margin: 0; }
+.cem-fulldesc-all .muted { font-weight: 400; }
 
 .cem-qty-cell { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .cem-unit-cell { text-align: center; font-size: 11px; color: #374151; }

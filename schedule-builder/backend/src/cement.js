@@ -18,15 +18,66 @@ function load() {
   return DB;
 }
 
-// Exact-code lookup for a set of DSR codes.
-// Returns { code: { description, unit, coeff, leaf_desc, group_desc, full_desc, source_page, matchType:'exact' } }
+// Ancestor codes of a DSR code, nearest first: '11.22.1.1' -> ['11.22.1', '11.22'].
+// STOPS at two segments — '11.26' -> '11' is a CHAPTER, not an item, and inheriting
+// a chapter-wide coefficient would be meaningless.
+function baseCodesOf(code) {
+  const parts = String(code).split('.');
+  const out = [];
+  for (let i = parts.length - 1; i >= 2; i--) out.push(parts.slice(0, i).join('.'));
+  return out;
+}
+
+// Would inheriting from `code` be unsafe? YES if its entry reads like a GROUP HEADING
+// rather than a priced item.
+//
+// This guard is load-bearing, not defensive padding. Two shapes of parent exist:
+//   • a real priced item whose sub-codes share its value — `11.26` Kota stone 0.1491,
+//     billed as `11.26.1`. Inheriting is correct.
+//   • a group heading whose leaves each have their OWN value — `17.4` "Fixing white
+//     vitreous china urinal basin :" over 17.4.1/.2/.3/.4 = 0.025/0.04/0.067/0.095.
+//     Inheriting would hand every variant the FIRST one's value.
+// The book's convention marks a heading with a trailing ':'. The second test catches
+// headings the extractor mangled: it failed to see the child's code, so it absorbed
+// the child's row — leaving the child's token inside this leaf_desc AND (worse) the
+// child's coefficient on the parent. Those parents are themselves mis-extracted; see
+// the phantom-parent note in the cement extraction guide.
+//
+// Measured against the BSNL VFP database: without the guard, 194 codes resolve but 21
+// are WRONG (all 21 trace to phantom parents 17.4/17.5/17.6/17.61/20.2A). With it,
+// 164 resolve and 0 are wrong — it blocks exactly the 21, costing 9 conservative
+// refusals. For a cement register, silently absent is recoverable; silently wrong is not.
+function isGroupHeading(entry, code) {
+  const leaf = String(entry.leaf_desc || '').trim();
+  if (leaf.endsWith(':')) return true;
+  return new RegExp(`(?<![\\d.])${code.replace(/\./g, '\\.')}\\.\\d`).test(leaf);
+}
+
+// Exact-code lookup, with a guarded base-code fallback.
+//
+// The Vol-2 appendix often prints ONE coefficient against a parent code while a bill
+// legitimately cites a sub-code (`11.26` -> `11.26.1`). Without a fallback those items
+// silently get NO cement at all. 164 such inheritances are independently confirmed by
+// the BSNL VFP database, where the same sub-codes carry exactly their parent's value —
+// this is what a real government estimating app does. See [[third-party-vfp-databases]].
+//
+// A fallback hit is reported as matchType:'base' with the ancestor in `matchedCode`, so
+// the UI flags it rather than passing it off as an exact match.
+// Returns { code: { description, unit, coeff, leaf_desc, group_desc, full_desc,
+//                   source_page, matchType:'exact'|'base', matchedCode } }
 export function coeffsFor(codes = []) {
   const db = load();
   const out = {};
   for (const raw of codes) {
     const code = String(raw || '').trim();
-    if (code && db[code]) {
-      out[code] = { ...db[code], matchType: 'exact' };
+    if (!code) continue;
+    if (db[code]) {
+      out[code] = { ...db[code], matchType: 'exact', matchedCode: code };
+      continue;
+    }
+    const base = baseCodesOf(code).find((b) => db[b] && !isGroupHeading(db[b], b));
+    if (base) {
+      out[code] = { ...db[base], matchType: 'base', matchedCode: base };
     }
   }
   return out;
@@ -68,6 +119,10 @@ export function searchByDesc(desc = '', limit = 5) {
         unit: entry.unit,
         coeff: entry.coeff,
         description: entry.full_desc || entry.description || entry.leaf_desc || '',
+        // Both carried so the Cement sheet's "Keep full description" tick can
+        // toggle between them on desc/code-matched rows too, not just exact ones.
+        leaf_desc: entry.leaf_desc || '',
+        full_desc: entry.full_desc || entry.description || '',
         source_page: entry.source_page,
         matchType: 'desc',
         score,
@@ -104,6 +159,10 @@ export function searchByCode(codeQuery = '', limit = 10) {
         unit: entry.unit,
         coeff: entry.coeff,
         description: entry.full_desc || entry.description || entry.leaf_desc || '',
+        // Both carried so the Cement sheet's "Keep full description" tick can
+        // toggle between them on desc/code-matched rows too, not just exact ones.
+        leaf_desc: entry.leaf_desc || '',
+        full_desc: entry.full_desc || entry.description || '',
         source_page: entry.source_page,
         matchType: 'code',
         score,
