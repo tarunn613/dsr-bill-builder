@@ -28,6 +28,37 @@ function descHeight(text, charsPerLine) {
 
 function num(v) { const n = parseFloat(String(v ?? '').replace(/,/g, '')); return isFinite(n) ? n : ''; }
 
+// Print setup, baked into the workbook so the exported file is ready to print /
+// Save-as-PDF on A4 the moment it opens — no visit to Page Setup first.
+//
+// Without this, Excel falls back to the machine's default paper (US Letter on a
+// US-defaulted install) and prints at 100%, so every sheet here — the narrowest
+// is 115 character-widths, well past A4 portrait — spills its right-hand columns
+// onto separate overflow pages. That is the "columns go missing when printing"
+// failure, and it is a property of the file, not of the printer.
+//
+//   paperSize 9   A4. Must be set explicitly; there is no "inherit A4".
+//   fitToPage     REQUIRED — Excel ignores fitToWidth/fitToHeight without it.
+//   fitToWidth 1  scale until all columns fit one page across.
+//   fitToHeight 0 "automatic": as many pages down as the sheet needs.
+//
+// Height stays automatic on purpose: fitToHeight 1 would squeeze a 75-block RE
+// sheet onto a single page and render it unreadable.
+function applyPageSetup(ws, { titlesRow } = {}) {
+  ws.pageSetup = {
+    paperSize: 9,
+    orientation: 'portrait',
+    fitToPage: true,
+    fitToWidth: 1,
+    fitToHeight: 0,
+    horizontalCentered: true,
+    margins: { left: 0.3, right: 0.3, top: 0.4, bottom: 0.4, header: 0.2, footer: 0.2 },
+    // repeat the column header on every printed page (Excel does this natively —
+    // the header block above it is deliberately NOT repeated, it belongs on page 1)
+    ...(titlesRow ? { printTitlesRow: `${titlesRow}:${titlesRow}` } : {}),
+  };
+}
+
 // srcSheet (optional): when set, the tender-detail rows mirror that sheet via live
 // formulas instead of writing literals — so the details are typed once on the Schedule
 // sheet and reflect on RE / Abstract / Cement. The title row stays sheet-specific.
@@ -95,6 +126,7 @@ function buildBillWorkbook(payload = {}) {
   sch.columns = [{ width: 7 }, { width: 12 }, { width: 68 }, { width: 9 }, { width: 9 }, { width: 13 }, { width: 15 }];
   headerBlock(sch, meta, 7, meta.billNo);
   colHeaderRow(sch, 19, ['S.No', 'Ref to DSR', 'DESCRIPTION', 'QTY.', 'UNIT', 'RATE', 'AMOUNT']);
+  applyPageSetup(sch, { titlesRow: 19 });
 
   const writeItemRow = (r, sno, it, recovery) => {
     const cells = [sno, it.ref || '', it.description || '', num(it.qty), it.unit || '', num(it.rate)];
@@ -154,6 +186,9 @@ function buildBillWorkbook(payload = {}) {
   const re = wb.addWorksheet('RE', { views: [{ showGridLines: false }] });
   re.columns = [{ width: 7 }, { width: 36 }, { width: 8 }, { width: 8 }, { width: 11 }, { width: 11 }, { width: 12 }, { width: 13 }, { width: 9 }];
   headerBlock(re, meta, 9, 'Record Entry', 'Schedule');
+  // No printTitlesRow: RE is a run of blocks, each carrying its own column header,
+  // so a repeated one would duplicate the header already at the top of each block.
+  applyPageSetup(re);
 
   // signature line — deliberately borderless (not part of the table), spread across the page
   const signatureLine = (rr) => {
@@ -211,6 +246,7 @@ function buildBillWorkbook(payload = {}) {
   ab.columns = [{ width: 7 }, { width: 68 }, { width: 12 }, { width: 9 }, { width: 13 }, { width: 15 }];
   headerBlock(ab, meta, 6, meta.billNo, 'Schedule');
   colHeaderRow(ab, 18, ['S.No', 'DESCRIPTION', 'QTY.', 'UNIT', 'RATE', 'AMOUNT']);
+  applyPageSetup(ab, { titlesRow: 18 });
   let ay = 20;
   const mainAmtCells = [], mktAmtCells = [];
   for (const i of ordered) {
@@ -297,6 +333,7 @@ function buildBillWorkbook(payload = {}) {
     noteCell.alignment = { horizontal: 'left' };
 
     colHeaderRow(cem, 17, ['S.No', 'DSR Ref', 'Description', 'Qty', 'Unit', 'Coeff.\n(Qtl/unit)', 'Cement\n(Qtl)']);
+    applyPageSetup(cem, { titlesRow: 17 });
     cem.getRow(17).height = 28;
 
     const cemStart = 18;
