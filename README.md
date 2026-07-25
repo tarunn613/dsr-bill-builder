@@ -163,11 +163,10 @@ schedule-builder/
 │       ├── excel.js / pdf.js  # schedule exports
 │       ├── bill-core.js       # bill calc chain (measured + scheduled)
 │       ├── bill-excel.js      # RA Bill workbook: cross-linked sheets, live formulas
-│       ├── bill-parse.js      # read an existing bill workbook back in
 │       ├── cement.js          # cement statement computation
 │       ├── formula.js         # in-process formula evaluator (for Excel -> PDF)
 │       ├── xlsx-pdf.js        # workbook -> B&W A4 PDF per sheet
-│       ├── json-import.js     # vision-model JSON -> schedule rows
+│       ├── json-import.js     # schedule-of-work JSON -> schedule rows
 │       ├── tender-import.js   # award-letter JSON -> bill header
 │       ├── ocr.js / ocr-engines.js  # on-device OCR + table reconstruction
 │       ├── sessions.js        # file-based session store (+ .dbill package/import)
@@ -178,9 +177,6 @@ schedule-builder/
         ├── pages/             # Home, DsrToSchedule, ScheduleToBill, Sessions, ExcelToPdf, Help
         └── components/        # header form, DSR autocomplete, bill tabs, import modals
 ```
-
-`schedule-builder-src/` is an earlier **v1.5.1** snapshot of the same tree, kept for
-reference. The live application is `schedule-builder/`.
 
 ## Calculation model
 
@@ -368,25 +364,26 @@ disabled until `OCR_VISION_ENDPOINT` and `OCR_VISION_API_KEY` are set.
 | GET | `/api/dsr/search?q=` | Ranked search by code prefix or keywords. |
 | GET | `/api/dsr/:code` | Exact lookup, including all rate variants. |
 | POST | `/api/schedule/compute` · `/xlsx` · `/pdf` | Live totals, Excel export, PDF export. |
-| POST | `/api/bill/compute` · `/xlsx` · `/parse` | Bill totals, workbook export, parse an uploaded bill. |
-| POST | `/api/ocr/recognize` | OCR one page image (`engine`: `paddle` \| `tesseract`) → token boxes. |
-| POST | `/api/ocr/parse` | Reconstruct the table from tokens and match codes to the database. |
-| POST | `/api/ocr/match` | Re-match a single edited code. |
-| GET | `/api/ocr/engines` | Which OCR engines can run on this device. |
+| POST | `/api/bill/compute` · `/xlsx` | Bill totals and the RA Bill workbook (cross-linked sheets, live formulas). |
+| POST | `/api/cement/coeffs` · `/search` · `/search-code` · `/search-combined` | Cement coefficient lookup for the Cement Statement. |
+| POST | `/api/json-import/parse` · `/match` | Parse a pasted Schedule-of-Work JSON into DSR-matched rows; re-match one edited code. |
+| POST | `/api/tender-import/parse` | Parse a pasted award-letter JSON into a Bill Header. |
+| POST | `/api/ocr/recognize` · `/parse` · `/match` | OCR a page image → token boxes; reconstruct the table; re-match one code. |
+| GET | `/api/ocr/engines` · `/api/ocr/vision/status` | Which OCR / vision engines can run on this device. |
+| POST | `/api/topdf/list` · `/api/topdf` | List a bill workbook's sheets, then convert it to B&W A4 PDFs (zip). |
 | GET/POST | `/api/sessions` | List / create sessions. |
 | GET/PUT/DELETE | `/api/sessions/:id` | Load / autosave / delete. |
 | GET | `/api/sessions/:id/exports/:exportId` | Re-download an archived export. |
 | GET | `/api/sessions/:id/package` | Download a whole session as `.dbill`. |
 | POST | `/api/sessions/import` | Import a `.dbill` as a new session. |
 
-Export and parse requests accept an optional `sessionId`; when present, the produced
-or uploaded file is archived into that session.
+Export requests accept an optional `sessionId`; when present, the produced file is
+archived into that session.
 
 ## Repository layout
 
 ```
 schedule-builder/          the application (see Architecture above)
-schedule-builder-src/      earlier v1.5.1 source snapshot, kept for reference
 dsr_database.db            extracted DSR 2023 rate book (SQLite)
 dsr_database.xlsx          the same data, human-readable
 dsr_multirate_codes.csv    codes carrying multiple rate variants
