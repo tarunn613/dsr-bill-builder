@@ -16,8 +16,10 @@ Only four sheets are in scope — **Schedule, RE, Abstract, Cement**. Everything
 a real bill (Deviation, AE/EE Test, Recovery registers, Completion Certificate) is
 deliberately ignored.
 
-Derived from the real reference bill in `phase-testing/DOC-20260712-WA0000..xlsx`
-(9 sheets, 85 items, 75 RE blocks, ~200-row cement template).
+Derived from a real signed reference bill (9 sheets, 85 items, 75 RE blocks,
+~200-row cement template). That workbook is **not included in this repository** —
+it carries live tender data. Every agreement number, amount and percentage quoted
+below is a placeholder standing in for the real one.
 
 ---
 
@@ -43,10 +45,13 @@ workbook, and each one breaks a naive parse.
 
 **Every sheet repeats the header block — and they disagree.** In the reference,
 `Schedule` says agreement `AL-00/EE X-0/DUSIB/2025-26/D-000`, tender ₹12,34567.00,
-quoted 00.00% below; `RE` and `Abstracrt` say `AL-00/EEX-0/DUSIB/AE-I/2026-27/D-000`,
-tender ₹12,34,567.00, quoted **00.00%** below. A real inconsistency in a real signed
-bill. Capture the header **per sheet** — merging them would print one sheet's tender
-under another's numbers.
+quoted 25.00% below; `RE` and `Abstracrt` say `AL-11/EEX-0/DUSIB/AE-I/2026-27/D-111`,
+tender ₹12,30,500.00, quoted **26.50%** below — two different agreements, two
+different tenders, two different percentages, inside one signed bill. (Figures are
+placeholders; the disagreement is real.) Note also the ₹12,34567.00 grouping: real
+bills mis-group digits, so never parse an amount by comma position. Capture the
+header **per sheet** — merging them would print one sheet's tender under another's
+numbers.
 
 **Category lives in the Ref column.** The Schedule's "Ref to DSR" column holds a DSR
 code (`15.2.1`), or `Appd` / `Appd.` / `APPD`, or `Mkt Rate`, or is blank. Copy it

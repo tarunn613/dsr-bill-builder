@@ -20,3 +20,17 @@ data/booklets/*.pdf
 # once git tracks source directly; wildcard covers versioned names too
 dsr-bill-builder-source*.zip
 schedule-builder-src.zip
+
+# Real tender documents — NEVER commit these to this public repo.
+# Award letters, signed bills and schedules carry a named agency, award-letter
+# numbers, site/JSC codes and the contractor's quoted percentage (commercially
+# sensitive bid data). Keep them on disk only; the app needs no sample to run.
+Schedule_of_Work.xlsx
+schedule.pdf
+phase-3/
+phase-4/
+phase-testing/
+*_bill*.xlsx
+DOC-*.xlsx
+DOC-*.pdf
+*.dbill
