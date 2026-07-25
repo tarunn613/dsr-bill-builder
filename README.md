@@ -6,6 +6,11 @@ Work**, and the Schedule into a complete **RA Bill** — Schedule, Record of
 Measurements, Abstract and Cement Statement — exported as an Excel workbook with
 **live formulas**.
 
+Built primarily for **government contractors in India** — those executing works
+across different departments and civic bodies (CPWD, PWD, DUSIB, MCD, DDA, and the
+like) that bill against the DSR. The tool is department-agnostic: any tender priced
+on the DSR follows the same schedule-to-bill workflow.
+
 **Version 1.8.0** · MIT licensed · Windows · macOS · Linux · React + Express +
 Electron · No internet connection required at any point.
 
